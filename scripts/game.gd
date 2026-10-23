@@ -51,6 +51,9 @@ func _process(delta: float) -> void:
             _spawn_enemy()
         _simulate(delta)
         _simulate_effects(delta)
+        # Autosave periodically so earned gold is not lost if Android closes the app.
+        if int(elapsed / 10.0) != int(maxf(0.0, elapsed - delta) / 10.0):
+            _save_game()
         if base_hp <= 0.0:
             screen = "game_over"
             best_wave = maxi(best_wave, wave)
@@ -187,7 +190,16 @@ func _upgrade() -> void:
         return
     gold -= 90
     upgrade_level += 1
-    _notify("Army upgraded: health and damage increased.")
+    # Upgrade already-deployed friendly troops as well as future recruits.
+    for i in range(units.size()):
+        var troop: Dictionary = units[i]
+        if int(troop["side"]) == 0:
+            var hp_bonus := maxf(8.0, float(troop["max_hp"]) * 0.12)
+            troop["max_hp"] = float(troop["max_hp"]) + hp_bonus
+            troop["hp"] = minf(float(troop["max_hp"]), float(troop["hp"]) + hp_bonus)
+            troop["damage"] = float(troop["damage"]) + 2.0
+            units[i] = troop
+    _notify("Army upgraded: troops reinforced.")
     _burst(Vector2(640, 400), GOLD, 18)
     _save_game()
 
