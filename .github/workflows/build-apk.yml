@@ -34,8 +34,15 @@ jobs:
           test -f /root/debug.keystore
           java -version
           godot --version
-          sdkmanager --licenses </dev/null
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest" "cmake;3.22.1" "ndk;25.2.9519653"
+          # Accept all Android SDK licenses non-interactively. Do not reinstall packages
+          # already baked into the godot-ci image (that can create duplicate SDK paths).
+          set +o pipefail
+          yes | sdkmanager --licenses
+          set -o pipefail
+          test -d "$ANDROID_HOME/platforms/android-33"
+          test -d "$ANDROID_HOME/build-tools/33.0.2"
+          test -d "$ANDROID_HOME/ndk/25.2.9519653"
+          test -d "$ANDROID_HOME/cmake/3.22.1"
 
       - name: Validate and import project
         run: |
