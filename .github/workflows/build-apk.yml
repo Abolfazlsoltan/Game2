@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GODOT_VERSION: "4.5"
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -18,6 +21,22 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # The image keeps its preinstalled editor settings and templates under /root.
+      # GitHub Actions runs this container with HOME=/github/home, so move/copy them
+      # into the active user's Godot directories before exporting.
+      - name: Configure Godot Android export environment
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config/godot"
+          cp -a "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" "$HOME/.local/share/godot/export_templates/"
+          cp -a /root/.config/godot/. "$HOME/.config/godot/"
+          test -f /root/debug.keystore
+          java -version
+          godot --version
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - name: Validate and import project
         run: |
           mkdir -p build
@@ -25,8 +44,9 @@ jobs:
 
       - name: Export debug APK
         run: |
-          godot --headless --path . --export-debug "Android" build/SmallWarriors.apk
+          godot --headless --verbose --path . --export-debug "Android" build/SmallWarriors.apk
           test -s build/SmallWarriors.apk
+          file build/SmallWarriors.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
