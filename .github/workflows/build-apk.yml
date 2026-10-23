@@ -11,92 +11,38 @@ permissions:
 
 env:
   GODOT_VERSION: "4.5"
-  GODOT_RELEASE: "4.5-stable"
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    container:
+      image: barichello/godot-ci:4.5
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Android SDK tools
-        uses: android-actions/setup-android@v4
-        with:
-          packages: ""
-          accept-android-sdk-licenses: true
-          log-accepted-android-sdk-licenses: false
-
-      - name: Install Android SDK components
+      - name: Configure Godot Android export environment
         shell: bash
         run: |
           set -euxo pipefail
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
-          mkdir -p "$SDK_ROOT"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          sdkmanager --sdk_root="$SDK_ROOT" \
-            "platforms;android-33" \
-            "build-tools;33.0.2" \
-            "cmake;3.22.1" \
-            "ndk;25.2.9519653"
-          test -x "$SDK_ROOT/platform-tools/adb"
-          test -d "$SDK_ROOT/platforms/android-33"
-          test -d "$SDK_ROOT/build-tools/33.0.2"
-          test -d "$SDK_ROOT/cmake/3.22.1"
-          test -d "$SDK_ROOT/ndk/25.2.9519653"
-          java -version
-          sdkmanager --version
-
-      - name: Install Godot 4.5 and export templates
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$HOME/.local/bin" "$HOME/.local/share/godot/export_templates/4.5.stable" "$RUNNER_TEMP/godot"
-          BASE_URL="https://github.com/godotengine/godot-builds/releases/download/${GODOT_RELEASE}"
-          curl --fail --location --retry 3 "$BASE_URL/Godot_v${GODOT_RELEASE}_linux.x86_64.zip" -o "$RUNNER_TEMP/godot/godot.zip"
-          curl --fail --location --retry 3 "$BASE_URL/Godot_v${GODOT_RELEASE}_export_templates.tpz" -o "$RUNNER_TEMP/godot/templates.tpz"
-          unzip -q "$RUNNER_TEMP/godot/godot.zip" -d "$RUNNER_TEMP/godot/editor"
-          unzip -q "$RUNNER_TEMP/godot/templates.tpz" -d "$RUNNER_TEMP/godot/template-files"
-          install -m 0755 "$RUNNER_TEMP/godot/editor/Godot_v${GODOT_RELEASE}_linux.x86_64" "$HOME/.local/bin/godot"
-          cp -a "$RUNNER_TEMP/godot/template-files/templates/." "$HOME/.local/share/godot/export_templates/4.5.stable/"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          godot --version
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config/godot"
+          cp -a "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" "$HOME/.local/share/godot/export_templates/"
+          cp -a /root/.config/godot/. "$HOME/.config/godot/"
+          test -f /root/debug.keystore
+          test -f "$HOME/.config/godot/editor_settings-4.5.tres"
           test -f "$HOME/.local/share/godot/export_templates/4.5.stable/android_debug.apk"
-          test -f "$HOME/.local/share/godot/export_templates/4.5.stable/android_release.apk"
-
-      - name: Configure Godot Android export settings
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$HOME/.config/godot" "$HOME/.android"
-          keytool -genkeypair -noprompt -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android -alias androiddebugkey -keypass android \
-            -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
-          cat > "$HOME/.config/godot/editor_settings-4.5.tres" <<EOF
-          [gd_resource type="EditorSettings" format=3]
-
-          [resource]
-          export/android/java_sdk_path = "$JAVA_HOME"
-          export/android/android_sdk_path = "$SDK_ROOT"
-          export/android/debug_keystore = "$HOME/.android/debug.keystore"
-          export/android/debug_keystore_user = "androiddebugkey"
-          export/android/debug_keystore_pass = "android"
-          export/android/force_system_user = false
-          export/android/timestamping_authority_url = ""
-          export/android/shutdown_adb_on_exit = true
-          EOF
-          cat "$HOME/.config/godot/editor_settings-4.5.tres"
-          test -f "$HOME/.android/debug.keystore"
+          test -d "$ANDROID_HOME/platforms/android-33"
+          test -d "$ANDROID_HOME/build-tools/33.0.2"
+          test -d "$ANDROID_HOME/ndk/25.2.9519653"
+          test -d "$ANDROID_HOME/cmake/3.22.1"
+          java -version
+          godot --version
+          # This CI image already contains the required SDK packages; accept licenses
+          # without reinstalling packages into duplicate platform-tools directories.
+          set +o pipefail
+          yes | sdkmanager --licenses
+          set -o pipefail
 
       - name: Validate and import project
         shell: bash
@@ -109,9 +55,8 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          godot --headless --verbose --path . --export-debug "Android" build/SmallWarriors.apk 2>&1 | tee "$RUNNER_TEMP/godot-export.log"
+          godot --headless --verbose --path . --export-debug "Android" build/SmallWarriors.apk 2>&1 | tee build/export.log
           test -s build/SmallWarriors.apk
-          file build/SmallWarriors.apk
           unzip -t build/SmallWarriors.apk
           unzip -l build/SmallWarriors.apk | grep -E 'lib/arm64-v8a/.*\.so|AndroidManifest.xml'
 
