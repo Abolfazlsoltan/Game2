@@ -1,0 +1,37 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.5
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Validate and import project
+        run: |
+          mkdir -p build
+          godot --headless --path . --editor --quit
+
+      - name: Export debug APK
+        run: |
+          godot --headless --path . --export-debug "Android" build/SmallWarriors.apk
+          test -s build/SmallWarriors.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmallWarriors-Android-APK
+          path: build/SmallWarriors.apk
+          if-no-files-found: error
+          retention-days: 30
