@@ -2,6 +2,7 @@ config_version=5
 
 [application]
 config/name="Small Warriors"
+config/icon="res://assets/app_icon.svg"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/description="A touch-friendly lane strategy game."
