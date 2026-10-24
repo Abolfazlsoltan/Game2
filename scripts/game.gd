@@ -99,6 +99,13 @@ func _spawn_enemy() -> void:
         "phase": rng.randf_range(0.0, TAU)
     })
 
+func _friendly_count() -> int:
+    var count := 0
+    for unit in units:
+        if int(unit["side"]) == 0 and float(unit["hp"]) > 0.0:
+            count += 1
+    return count
+
 func _recruit(kind: String) -> void:
     var cost: int = COSTS[kind]
     if gold < cost:
