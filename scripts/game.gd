@@ -6,6 +6,8 @@ const W := 1280.0
 const H := 720.0
 const GROUND_Y := 548.0
 const COSTS := {"SWORD": 35, "ARCHER": 55, "GUARD": 75}
+const UPGRADE_COST := 90
+const MAX_FRIENDLY_UNITS := 24
 const UNIT_COLORS := {"SWORD": Color("#4f9dff"), "ARCHER": Color("#62d6b0"), "GUARD": Color("#b69cff")}
 const GOLD := Color("#ffc96a")
 const TEXT := Color("#f3f6fb")
@@ -28,6 +30,8 @@ var base_hp := 100.0
 var enemy_base_hp := 100.0
 var upgrade_level := 0
 var kills := 0
+var total_kills := 0
+var wave_kills := 0
 var elapsed := 0.0
 var notice := "Build your army. Protect your keep."
 var notice_time := 3.0
@@ -95,10 +99,20 @@ func _spawn_enemy() -> void:
         "phase": rng.randf_range(0.0, TAU)
     })
 
+func _friendly_count() -> int:
+    var count := 0
+    for unit in units:
+        if int(unit["side"]) == 0 and float(unit["hp"]) > 0.0:
+            count += 1
+    return count
+
 func _recruit(kind: String) -> void:
     var cost: int = COSTS[kind]
     if gold < cost:
         _notify("Not enough gold. Defeat enemies to earn more.")
+        return
+    if _friendly_count() >= MAX_FRIENDLY_UNITS:
+        _notify("Army limit reached (" + str(MAX_FRIENDLY_UNITS) + " troops).")
         return
     gold -= cost
     var s := _stats(kind, true)
@@ -115,12 +129,17 @@ func _recruit(kind: String) -> void:
 func _simulate(delta: float) -> void:
     for i in range(units.size()):
         var u: Dictionary = units[i]
+        if float(u["hp"]) <= 0.0:
+            continue
         u["attack_cd"] = maxf(0.0, float(u["attack_cd"]) - delta)
         var side := int(u["side"])
         var x := float(u["x"])
         var target_i := _find_target(u)
         if target_i >= 0:
             var target: Dictionary = units[target_i]
+            if float(target["hp"]) <= 0.0:
+                units[i] = u
+                continue
             var distance := absf(float(target["x"]) - x)
             if distance <= float(u["range"]):
                 if float(u["attack_cd"]) <= 0.0:
@@ -154,13 +173,15 @@ func _simulate(delta: float) -> void:
             if int(dead["side"]) == 1:
                 gold += 9
                 kills += 1
+                total_kills += 1
+                wave_kills += 1
             units.remove_at(i)
 
 func _find_target(unit: Dictionary) -> int:
     var best := -1
     var best_distance := INF
     for i in range(units.size()):
-        if int(units[i]["side"]) == int(unit["side"]):
+        if int(units[i]["side"]) == int(unit["side"]) or float(units[i]["hp"]) <= 0.0:
             continue
         var d := absf(float(units[i]["x"]) - float(unit["x"]))
         if d < best_distance and d <= 250.0:
@@ -180,15 +201,16 @@ func _check_wave() -> void:
     gold += reward
     enemy_target = mini(4 + wave * 2, 24)
     enemy_spawned = 0
+    wave_kills = 0
     spawn_timer = 0.0
     _notify("Wave cleared! +" + str(reward) + " gold.")
     _save_game()
 
 func _upgrade() -> void:
-    if gold < 90:
-        _notify("Upgrade costs 90 gold.")
+    if gold < UPGRADE_COST:
+        _notify("Upgrade costs " + str(UPGRADE_COST) + " gold.")
         return
-    gold -= 90
+    gold -= UPGRADE_COST
     upgrade_level += 1
     # Upgrade already-deployed friendly troops as well as future recruits.
     for i in range(units.size()):
@@ -206,7 +228,7 @@ func _upgrade() -> void:
 func _start_game() -> void:
     screen = "battle"
     paused = false
-    gold = maxi(gold, 60)
+    gold = maxi(gold, COSTS["SWORD"] * 2)
     wave = 1
     enemy_target = 4
     enemy_spawned = 0
@@ -215,6 +237,7 @@ func _start_game() -> void:
     enemy_base_hp = 100.0
     elapsed = 0.0
     kills = 0
+    wave_kills = 0
     units.clear()
     particles.clear()
     floaters.clear()
@@ -263,6 +286,7 @@ func _draw() -> void:
     _draw_background()
     match screen:
         "menu": _draw_menu()
+        "help": _draw_help()
         "battle": _draw_battle()
         "game_over": _draw_game_over()
     draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -291,26 +315,26 @@ func _draw_menu() -> void:
     _draw_unit_art(Vector2(890, 486), "ARCHER", 0, 1.15)
     _draw_unit_art(Vector2(1030, 486), "GUARD", 1, 1.15)
     _button(Rect2(80, 360, 250, 66), "START BATTLE", GOLD, PANEL)
-    _text("BEST WAVE  " + str(best_wave), Vector2(82, 465), 14, MUTED)
-    _text("Offline • Progress saved locally", Vector2(82, 505), 13, MUTED)
-    _text("Tap START to deploy. Recruit, upgrade, and outlast each wave.", Vector2(82, 540), 12, Color("#71869c"))
-    _text("BUILD 0.1.0", Vector2(80, 665), 12, Color("#60758b"))
+    _button(Rect2(80, 445, 250, 54), "HOW TO PLAY", Color("#344b64"), PANEL)
+    _text("BEST WAVE  " + str(best_wave), Vector2(82, 535), 14, MUTED)
+    _text("TOTAL KILLS  " + str(total_kills), Vector2(82, 560), 13, MUTED)
+    _text("Offline • Progress saved locally", Vector2(82, 590), 13, MUTED)
+    _text("ENDLESS SURVIVAL", Vector2(82, 620), 12, Color("#71869c"))
+    _text("BUILD 0.2.0", Vector2(80, 665), 12, Color("#60758b"))
 
 func _draw_battle() -> void:
     _text("SMALL WARRIORS", Vector2(36, 42), 17, GOLD)
     _text("WAVE " + str(wave), Vector2(36, 76), 25, TEXT)
     _text("KILLS  " + str(kills), Vector2(36, 104), 13, MUTED)
-    var friendly_count := 0
-    for troop in units:
-        if int(troop["side"]) == 0:
-            friendly_count += 1
-    _text("TROOPS  " + str(friendly_count), Vector2(300, 42), 13, MUTED)
-    _text("ENEMIES LEFT  " + str(maxi(0, enemy_target - enemy_spawned)), Vector2(300, 66), 12, MUTED)
+    var friendly_count := _friendly_count()
+    _text("TROOPS  " + str(friendly_count) + "/" + str(MAX_FRIENDLY_UNITS), Vector2(300, 42), 13, MUTED)
+    _text("ENEMIES LEFT  " + str(maxi(0, enemy_target - wave_kills)), Vector2(300, 66), 12, MUTED)
+    _text("UPGRADE LV. " + str(upgrade_level), Vector2(300, 88), 11, MUTED)
     _pill(Rect2(930, 25, 300, 54), "✦  " + str(gold) + " GOLD", GOLD)
     _bar(Rect2(36, 125, 230, 12), base_hp / 100.0, BLUE)
-    _text("YOUR KEEP", Vector2(36, 151), 11, MUTED)
+    _text("YOUR KEEP  " + str(roundi(base_hp)) + "%", Vector2(36, 151), 11, MUTED)
     _bar(Rect2(1010, 125, 220, 12), enemy_base_hp / 100.0, RED)
-    _text("ENEMY KEEP", Vector2(1090, 151), 11, MUTED)
+    _text("ENEMY KEEP  " + str(roundi(enemy_base_hp)) + "%", Vector2(1090, 151), 11, MUTED)
     _draw_keep(Vector2(150, 470), true)
     _draw_keep(Vector2(1130, 470), false)
     for u in units:
@@ -329,7 +353,7 @@ func _draw_battle() -> void:
     _button(Rect2(30, 590, 190, 82), "SWORDSMAN  ·  35", BLUE, PANEL)
     _button(Rect2(235, 590, 190, 82), "ARCHER  ·  55", GREEN, PANEL)
     _button(Rect2(440, 590, 190, 82), "GUARD  ·  75", Color("#b69cff"), PANEL)
-    _button(Rect2(1000, 590, 230, 82), "UPGRADE  ·  90", GOLD, PANEL)
+    _button(Rect2(1000, 590, 230, 82), "UPGRADE  ·  " + str(UPGRADE_COST), GOLD, PANEL)
     _text("Recruit units to push forward", Vector2(675, 620), 14, MUTED)
     _button(Rect2(1080, 92, 150, 34), "PAUSE  II", Color("#344b64"), PANEL)
     if paused:
@@ -337,10 +361,29 @@ func _draw_battle() -> void:
         draw_rect(Rect2(390, 205, 500, 320), Color("#0d1a2b"))
         draw_rect(Rect2(390, 205, 500, 320), Color("#41617a"), false, 2.0)
         _text("BATTLE PAUSED", Vector2(510, 255), 28, TEXT)
-        _text("Your progress is saved automatically.", Vector2(458, 286), 15, MUTED)
+        _text("Your stats and rewards are saved automatically.", Vector2(458, 286), 15, MUTED)
         _button(Rect2(470, 315, 340, 52), "RESUME BATTLE", GOLD, PANEL)
         _button(Rect2(470, 381, 340, 52), "RESTART BATTLE", BLUE, PANEL)
         _button(Rect2(470, 447, 340, 52), "MAIN MENU", Color("#344b64"), PANEL)
+
+func _draw_help() -> void:
+    _text("HOW TO PLAY", Vector2(80, 100), 28, GOLD)
+    _text("A tactical endless-survival game", Vector2(82, 132), 16, MUTED)
+    var lines := [
+        "1. Recruit swordsmen for balanced frontline damage.",
+        "2. Archers attack from a distance but have less health.",
+        "3. Guards are tough and slow; use them to hold the line.",
+        "4. Defeat enemies to earn gold, then upgrade your army.",
+        "5. Clear every wave to earn a bonus and face a harder wave.",
+        "6. Protect your keep. If its health reaches zero, the run ends.",
+        "7. Breaking the enemy keep grants a bonus; the siege continues.",
+        "",
+        "Recruitment: Sword 35 gold  •  Archer 55 gold  •  Guard 75 gold",
+        "Army upgrade: 90 gold  •  Maximum friendly troops: 24"
+    ]
+    for i in range(lines.size()):
+        _text(lines[i], Vector2(82, 205 + i * 35), 15, TEXT if not lines[i].is_empty() else MUTED)
+    _button(Rect2(80, 610, 250, 58), "BACK TO MENU", Color("#344b64"), PANEL)
 
 func _draw_game_over() -> void:
     _text("KEEP FALLEN", Vector2(80, 170), 18, RED)
@@ -438,6 +481,8 @@ func _tap(p: Vector2) -> void:
     if screen == "menu":
         if Rect2(80, 360, 250, 66).has_point(p):
             _start_game()
+        elif Rect2(80, 445, 250, 54).has_point(p):
+            screen = "help"
     elif screen == "battle":
         if Rect2(1080, 92, 150, 34).has_point(p):
             paused = not paused
@@ -461,6 +506,9 @@ func _tap(p: Vector2) -> void:
             _recruit("GUARD")
         elif Rect2(1000, 590, 230, 82).has_point(p):
             _upgrade()
+    elif screen == "help":
+        if Rect2(80, 610, 250, 58).has_point(p):
+            screen = "menu"
     elif screen == "game_over":
         if Rect2(80, 350, 250, 66).has_point(p):
             _start_game()
@@ -474,6 +522,7 @@ func _save_game() -> void:
     cfg.set_value("progress", "best_wave", best_wave)
     cfg.set_value("progress", "upgrade_level", upgrade_level)
     cfg.set_value("progress", "kills", kills)
+    cfg.set_value("progress", "total_kills", total_kills)
     cfg.save(SAVE_PATH)
 
 func _load_save() -> void:
@@ -483,7 +532,14 @@ func _load_save() -> void:
         best_wave = int(cfg.get_value("progress", "best_wave", best_wave))
         upgrade_level = int(cfg.get_value("progress", "upgrade_level", upgrade_level))
         kills = int(cfg.get_value("progress", "kills", kills))
+        total_kills = int(cfg.get_value("progress", "total_kills", kills))
+        gold = clampi(gold, 0, 999999)
+        best_wave = clampi(best_wave, 1, 9999)
+        upgrade_level = clampi(upgrade_level, 0, 999)
+        total_kills = maxi(0, total_kills)
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+        if what == NOTIFICATION_APPLICATION_PAUSED and screen == "battle":
+            paused = true
         _save_game()
