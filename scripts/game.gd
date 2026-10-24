@@ -111,7 +111,7 @@ func _recruit(kind: String) -> void:
     if gold < cost:
         _notify("Not enough gold. Defeat enemies to earn more.")
         return
-    if int(units.filter(func(u): return int(u["side"]) == 0).size()) >= MAX_FRIENDLY_UNITS:
+    if _friendly_count() >= MAX_FRIENDLY_UNITS:
         _notify("Army limit reached (" + str(MAX_FRIENDLY_UNITS) + " troops).")
         return
     gold -= cost
@@ -326,18 +326,15 @@ func _draw_battle() -> void:
     _text("SMALL WARRIORS", Vector2(36, 42), 17, GOLD)
     _text("WAVE " + str(wave), Vector2(36, 76), 25, TEXT)
     _text("KILLS  " + str(kills), Vector2(36, 104), 13, MUTED)
-    var friendly_count := 0
-    for troop in units:
-        if int(troop["side"]) == 0:
-            friendly_count += 1
+    var friendly_count := _friendly_count()
     _text("TROOPS  " + str(friendly_count) + "/" + str(MAX_FRIENDLY_UNITS), Vector2(300, 42), 13, MUTED)
     _text("ENEMIES LEFT  " + str(maxi(0, enemy_target - wave_kills)), Vector2(300, 66), 12, MUTED)
     _text("UPGRADE LV. " + str(upgrade_level), Vector2(300, 88), 11, MUTED)
     _pill(Rect2(930, 25, 300, 54), "✦  " + str(gold) + " GOLD", GOLD)
     _bar(Rect2(36, 125, 230, 12), base_hp / 100.0, BLUE)
-    _text("YOUR KEEP", Vector2(36, 151), 11, MUTED)
+    _text("YOUR KEEP  " + str(roundi(base_hp)) + "%", Vector2(36, 151), 11, MUTED)
     _bar(Rect2(1010, 125, 220, 12), enemy_base_hp / 100.0, RED)
-    _text("ENEMY KEEP", Vector2(1090, 151), 11, MUTED)
+    _text("ENEMY KEEP  " + str(roundi(enemy_base_hp)) + "%", Vector2(1090, 151), 11, MUTED)
     _draw_keep(Vector2(150, 470), true)
     _draw_keep(Vector2(1130, 470), false)
     for u in units:
@@ -543,4 +540,6 @@ func _load_save() -> void:
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+        if what == NOTIFICATION_APPLICATION_PAUSED and screen == "battle":
+            paused = true
         _save_game()
