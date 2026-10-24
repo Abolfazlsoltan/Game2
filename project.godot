@@ -5,7 +5,7 @@ config/name="Small Warriors"
 config/icon="res://assets/app_icon.svg"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
-config/description="A touch-friendly lane strategy game."
+config/description="A polished, touch-friendly endless lane strategy game."
 
 [display]
 window/size/viewport_width=1280
