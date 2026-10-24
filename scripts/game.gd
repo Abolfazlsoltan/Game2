@@ -320,7 +320,7 @@ func _draw_menu() -> void:
     _text("TOTAL KILLS  " + str(total_kills), Vector2(82, 560), 13, MUTED)
     _text("Offline • Progress saved locally", Vector2(82, 590), 13, MUTED)
     _text("ENDLESS SURVIVAL", Vector2(82, 620), 12, Color("#71869c"))
-    _text("BUILD 0.1.0", Vector2(80, 665), 12, Color("#60758b"))
+    _text("BUILD 0.2.0", Vector2(80, 665), 12, Color("#60758b"))
 
 func _draw_battle() -> void:
     _text("SMALL WARRIORS", Vector2(36, 42), 17, GOLD)
