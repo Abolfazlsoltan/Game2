@@ -255,9 +255,11 @@ func _simulate_effects(delta: float) -> void:
             floaters[i] = f
 
 func _draw() -> void:
+    # Keep the 16:9 game canvas proportional on phones and tablets.
     var viewport_size := get_viewport_rect().size
-    var scale := Vector2(viewport_size.x / W, viewport_size.y / H)
-    draw_set_transform(Vector2.ZERO, 0.0, scale)
+    var uniform_scale := minf(viewport_size.x / W, viewport_size.y / H)
+    var offset := (viewport_size - Vector2(W, H) * uniform_scale) * 0.5
+    draw_set_transform(offset, 0.0, Vector2.ONE * uniform_scale)
     _draw_background()
     match screen:
         "menu": _draw_menu()
@@ -291,12 +293,19 @@ func _draw_menu() -> void:
     _button(Rect2(80, 360, 250, 66), "START BATTLE", GOLD, PANEL)
     _text("BEST WAVE  " + str(best_wave), Vector2(82, 465), 14, MUTED)
     _text("Offline • Progress saved locally", Vector2(82, 505), 13, MUTED)
+    _text("Tap START to deploy. Recruit, upgrade, and outlast each wave.", Vector2(82, 540), 12, Color("#71869c"))
     _text("BUILD 0.1.0", Vector2(80, 665), 12, Color("#60758b"))
 
 func _draw_battle() -> void:
     _text("SMALL WARRIORS", Vector2(36, 42), 17, GOLD)
     _text("WAVE " + str(wave), Vector2(36, 76), 25, TEXT)
     _text("KILLS  " + str(kills), Vector2(36, 104), 13, MUTED)
+    var friendly_count := 0
+    for troop in units:
+        if int(troop["side"]) == 0:
+            friendly_count += 1
+    _text("TROOPS  " + str(friendly_count), Vector2(300, 42), 13, MUTED)
+    _text("ENEMIES LEFT  " + str(maxi(0, enemy_target - enemy_spawned)), Vector2(300, 66), 12, MUTED)
     _pill(Rect2(930, 25, 300, 54), "✦  " + str(gold) + " GOLD", GOLD)
     _bar(Rect2(36, 125, 230, 12), base_hp / 100.0, BLUE)
     _text("YOUR KEEP", Vector2(36, 151), 11, MUTED)
@@ -324,10 +333,14 @@ func _draw_battle() -> void:
     _text("Recruit units to push forward", Vector2(675, 620), 14, MUTED)
     _button(Rect2(1080, 92, 150, 34), "PAUSE  II", Color("#344b64"), PANEL)
     if paused:
-        draw_rect(Rect2(0, 0, W, H), Color(0.02, 0.04, 0.08, 0.78))
-        _text("BATTLE PAUSED", Vector2(480, 275), 28, TEXT)
-        _text("Your army is waiting.", Vector2(520, 310), 16, MUTED)
-        _button(Rect2(500, 340, 280, 60), "RESUME BATTLE", GOLD, PANEL)
+        draw_rect(Rect2(0, 0, W, H), Color(0.02, 0.04, 0.08, 0.84))
+        draw_rect(Rect2(390, 205, 500, 320), Color("#0d1a2b"))
+        draw_rect(Rect2(390, 205, 500, 320), Color("#41617a"), false, 2.0)
+        _text("BATTLE PAUSED", Vector2(510, 255), 28, TEXT)
+        _text("Your progress is saved automatically.", Vector2(458, 286), 15, MUTED)
+        _button(Rect2(470, 315, 340, 52), "RESUME BATTLE", GOLD, PANEL)
+        _button(Rect2(470, 381, 340, 52), "RESTART BATTLE", BLUE, PANEL)
+        _button(Rect2(470, 447, 340, 52), "MAIN MENU", Color("#344b64"), PANEL)
 
 func _draw_game_over() -> void:
     _text("KEEP FALLEN", Vector2(80, 170), 18, RED)
@@ -414,7 +427,11 @@ func _input(event: InputEvent) -> void:
     if not pressed:
         return
     var viewport_size := get_viewport_rect().size
-    point = Vector2(point.x * W / viewport_size.x, point.y * H / viewport_size.y)
+    var uniform_scale := minf(viewport_size.x / W, viewport_size.y / H)
+    var offset := (viewport_size - Vector2(W, H) * uniform_scale) * 0.5
+    point = (point - offset) / uniform_scale
+    if point.x < 0.0 or point.y < 0.0 or point.x > W or point.y > H:
+        return
     _tap(point)
 
 func _tap(p: Vector2) -> void:
@@ -426,8 +443,16 @@ func _tap(p: Vector2) -> void:
             paused = not paused
             _notify("Battle paused." if paused else "Battle resumed.")
         elif paused:
-            if Rect2(500, 340, 280, 60).has_point(p):
+            if Rect2(470, 315, 340, 52).has_point(p):
                 paused = false
+                _notify("Battle resumed.")
+            elif Rect2(470, 381, 340, 52).has_point(p):
+                _start_game()
+                _notify("A new battle begins!")
+            elif Rect2(470, 447, 340, 52).has_point(p):
+                paused = false
+                screen = "menu"
+                _save_game()
         elif Rect2(30, 590, 190, 82).has_point(p):
             _recruit("SWORD")
         elif Rect2(235, 590, 190, 82).has_point(p):

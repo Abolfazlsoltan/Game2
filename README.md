@@ -7,7 +7,7 @@ A touch-friendly 2D lane-strategy game built with Godot 4 and GDScript.
 - Defend your keep while attacking the enemy keep.
 - Survive increasingly difficult enemy waves.
 - Earn gold, upgrade your army, and save progress locally.
-- Touch-friendly interface, pause/resume, restart, health bars, and combat effects.
+- Touch-friendly interface with proportional 16:9 scaling, troop/enemy counters, pause/resume/restart/main-menu controls, health bars, and combat effects.
 - Offline gameplay; no external assets or network access required.
 
 ## Run locally
