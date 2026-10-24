@@ -228,7 +228,7 @@ func _upgrade() -> void:
 func _start_game() -> void:
     screen = "battle"
     paused = false
-    gold = maxi(gold, 60)
+    gold = maxi(gold, COSTS["SWORD"] * 2)
     wave = 1
     enemy_target = 4
     enemy_spawned = 0
