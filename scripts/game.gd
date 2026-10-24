@@ -361,7 +361,7 @@ func _draw_battle() -> void:
         draw_rect(Rect2(390, 205, 500, 320), Color("#0d1a2b"))
         draw_rect(Rect2(390, 205, 500, 320), Color("#41617a"), false, 2.0)
         _text("BATTLE PAUSED", Vector2(510, 255), 28, TEXT)
-        _text("Your progress is saved automatically.", Vector2(458, 286), 15, MUTED)
+        _text("Your stats and rewards are saved automatically.", Vector2(458, 286), 15, MUTED)
         _button(Rect2(470, 315, 340, 52), "RESUME BATTLE", GOLD, PANEL)
         _button(Rect2(470, 381, 340, 52), "RESTART BATTLE", BLUE, PANEL)
         _button(Rect2(470, 447, 340, 52), "MAIN MENU", Color("#344b64"), PANEL)
