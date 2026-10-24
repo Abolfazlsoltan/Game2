@@ -7,7 +7,11 @@ A touch-friendly 2D lane-strategy game built with Godot 4 and GDScript.
 - Defend your keep while attacking the enemy keep.
 - Survive increasingly difficult enemy waves.
 - Earn gold, upgrade your army, and save progress locally.
-- Touch-friendly interface with proportional 16:9 scaling, troop/enemy counters, pause/resume/restart/main-menu controls, health bars, and combat effects.
+- Touch-friendly interface with proportional 16:9 scaling and correctly mapped touch input.
+- Live troop, remaining-enemy, upgrade-level, and keep-health indicators.
+- Pause/resume/restart/main-menu controls; gameplay pauses when the app is backgrounded.
+- A built-in How to Play guide, a 24-troop friendly army cap, and clear economy costs.
+- Endless-survival progression, increasingly difficult waves, wave rewards, upgrades, combat effects, and persistent best-wave / lifetime-kill stats.
 - Offline gameplay; no external assets or network access required.
 
 ## Run locally
@@ -31,13 +35,14 @@ The APK is for testing. A production Play Store release needs a protected releas
 - Persistent save: `user://small_warriors.cfg`
 
 ## QA checklist
-- [ ] Open project without parser errors.
-- [ ] Start battle and recruit all three unit types.
-- [ ] Verify gold costs, attacks, health bars, deaths, wave rewards, and upgrade effects.
-- [ ] Pause/resume and restart.
-- [ ] Verify progress survives app restart.
+- [ ] GitHub Actions parses/imports the project and exports a valid ARM64 APK.
+- [ ] Start battle and recruit all three unit types; confirm the 24-unit cap and insufficient-gold feedback.
+- [ ] Verify attacks, unit deaths, keep damage, wave rewards, enemy-keep bonus, and upgrade effects.
+- [ ] Check that the remaining-enemy counter decreases when enemies are defeated.
+- [ ] Pause/resume, restart, return to menu, and open the How to Play guide.
+- [ ] Background the Android app during battle; confirm it pauses and saved stats persist.
 - [ ] Install and test the generated APK on a physical Android device.
-- [ ] Before release, test multiple screen sizes and lower-end hardware.
+- [ ] Before public release, test multiple aspect ratios and lower-end hardware, and add signed release builds plus store assets.
 
 ## Official references
 - [Godot Android export guide](https://docs.godotengine.org/en/stable/tutorials/export/exporting_for_android.html)
