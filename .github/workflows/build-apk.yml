@@ -57,6 +57,12 @@ jobs:
           set -euxo pipefail
           godot --headless --path . -- --validate-data
 
+      - name: Validate campaign save round-trip
+        shell: bash
+        run: |
+          set -euxo pipefail
+          godot --headless --path . -- --validate-save
+
       - name: Run battle simulation smoke test
         shell: bash
         run: |

@@ -21,6 +21,7 @@ const GREEN := Color("#7dcea0")
 const INK := Color(0.05, 0.07, 0.1, 0.94)
 
 const GameDefinitions = preload("res://scripts/data/game_definitions.gd")
+const SaveService = preload("res://scripts/systems/save_service.gd")
 const STATS = GameDefinitions.STATS
 const KIND_ORDER = GameDefinitions.KIND_ORDER
 const STAGES = GameDefinitions.STAGES
@@ -82,6 +83,9 @@ func _ready() -> void:
 			for issue in data_errors:
 				push_error("DATA_VALIDATION_FAIL: " + issue)
 			get_tree().quit(1)
+		return
+	if OS.get_cmdline_user_args().has("--validate-save"):
+		get_tree().quit(0 if _validate_save_service() else 1)
 		return
 	rng.randomize()
 	_load_save()
@@ -180,27 +184,53 @@ func _back() -> void:
 		get_tree().quit()
 
 func _load_save() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
-		return
-	unlocked = clampi(int(cfg.get_value("campaign", "unlocked", 1)), 1, 8)
-	wins = maxi(0, int(cfg.get_value("campaign", "wins", 0)))
-	sfx_on = bool(cfg.get_value("campaign", "sfx", true))
-	var raw := str(cfg.get_value("campaign", "stars", "0,0,0,0,0,0,0,0"))
-	var bits := raw.split(",")
-	for i in 8:
-		stars[i] = clampi(int(bits[i]) if i < bits.size() else 0, 0, 3)
+	var progress: Dictionary = SaveService.load_progress(SAVE_PATH, STAGES.size())
+	unlocked = int(progress.get("unlocked", 1))
+	wins = int(progress.get("wins", 0))
+	sfx_on = bool(progress.get("sfx_on", true))
+	stars = progress.get("stars", [0, 0, 0, 0, 0, 0, 0, 0])
 
 func _save_game() -> void:
-	var cfg := ConfigFile.new()
-	cfg.set_value("campaign", "unlocked", unlocked)
-	cfg.set_value("campaign", "wins", wins)
-	cfg.set_value("campaign", "sfx", sfx_on)
-	var bits: Array[String] = []
-	for s in stars:
-		bits.append(str(int(s)))
-	cfg.set_value("campaign", "stars", ",".join(bits))
-	cfg.save(SAVE_PATH)
+	var progress := {
+		"unlocked": unlocked,
+		"wins": wins,
+		"sfx_on": sfx_on,
+		"stars": stars,
+	}
+	var save_error: Error = SaveService.save_progress(progress, SAVE_PATH, STAGES.size())
+	if save_error != OK:
+		push_warning("Unable to save campaign progress. Error code: " + str(save_error))
+
+func _validate_save_service() -> bool:
+	var test_path := "user://small_warriors_save_validation.cfg"
+	var sample := {
+		"unlocked": mini(2, STAGES.size()),
+		"wins": 7,
+		"sfx_on": false,
+		"stars": [3, 2, 1, 0, 3, 2, 1, 0],
+	}
+	var write_error: Error = SaveService.save_progress(sample, test_path, STAGES.size())
+	if write_error != OK:
+		push_error("SAVE_VALIDATION_FAIL: unable to write test save, error=" + str(write_error))
+		return false
+	var loaded: Dictionary = SaveService.load_progress(test_path, STAGES.size())
+	var expected_stars: Array = []
+	for i in STAGES.size():
+		expected_stars.append(int(sample["stars"][i]) if i < sample["stars"].size() else 0)
+	var valid := (
+		int(loaded.get("unlocked", 0)) == int(sample["unlocked"])
+		and int(loaded.get("wins", -1)) == int(sample["wins"])
+		and bool(loaded.get("sfx_on", true)) == bool(sample["sfx_on"])
+		and loaded.get("stars", []) == expected_stars
+	)
+	var remove_error: Error = DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
+	if remove_error != OK:
+		push_warning("Could not remove temporary save validation file: " + str(remove_error))
+	if valid:
+		print("SAVE_VALIDATION_OK: campaign progress round-trip passed.")
+	else:
+		push_error("SAVE_VALIDATION_FAIL: round-trip values did not match.")
+	return valid
 
 func _stage() -> Dictionary:
 	return STAGES[stage_i]
