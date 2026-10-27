@@ -134,13 +134,15 @@ func _ready() -> void:
 			if int(u["side"]) == 0 and str(u["kind"]) != "MINER":
 				lead_x = maxf(lead_x, float(u["x"]))
 		print("SMOKE end=", ending, " dp=", int(start_p - player_hp), " de=", int(start_e - enemy_hp), " lead=", int(lead_x), " goldd=", gold - start_gold, " units=", units.size())
-		if lead_x < 450.0 and ending == "":
-			print("SMOKE_FAIL no advance")
+		var smoke_ok := lead_x >= 450.0 or ending != ""
+		if not smoke_ok:
+			push_error("SMOKE_FAIL: friendly combat units did not advance far enough.")
 			for u in units:
 				print(" U ", u["side"], " ", u["kind"], " x=", int(u["x"]), " hp=", int(u["hp"]))
+			get_tree().quit(1)
 		else:
-			print("SMOKE_OK")
-		get_tree().quit()
+			print("SMOKE_OK: battle simulation advanced; ending=", ending, " player_hp=", int(player_hp), " enemy_hp=", int(enemy_hp), " units=", units.size())
+			get_tree().quit(0)
 		return
 
 func _process(delta: float) -> void:
