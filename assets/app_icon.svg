@@ -2,48 +2,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#101b32"/>
-      <stop offset="0.55" stop-color="#182d4b"/>
-      <stop offset="1" stop-color="#07101f"/>
-    </linearGradient>
-    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.48" stop-color="#dbe9f7"/>
-      <stop offset="1" stop-color="#7da2c5"/>
+      <stop offset="0" stop-color="#243656"/>
+      <stop offset="0.55" stop-color="#1a2740"/>
+      <stop offset="1" stop-color="#101820"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffe9a3"/>
-      <stop offset="0.5" stop-color="#e7b94f"/>
-      <stop offset="1" stop-color="#b97824"/>
+      <stop offset="0" stop-color="#ffe7a8"/>
+      <stop offset="0.5" stop-color="#e2b34a"/>
+      <stop offset="1" stop-color="#a87422"/>
     </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="38%" r="64%">
-      <stop offset="0" stop-color="#4f80ab" stop-opacity=".42"/>
-      <stop offset="1" stop-color="#13243b" stop-opacity="0"/>
-    </radialGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
-  <path d="M256 62 392 115 382 274c-5 75-55 130-126 174-71-44-121-99-126-174L120 115Z"
-        fill="#14243c" stroke="url(#gold)" stroke-width="13" stroke-linejoin="round"/>
-  <path d="M256 83 369 127 360 271c-4 61-44 107-104 146-60-39-100-85-104-146l-9-144Z"
-        fill="none" stroke="#54718f" stroke-width="3" opacity=".75"/>
-  <!-- Crossed polished blades -->
-  <path d="M153 143 174 151 345 320 329 338 160 164Z" fill="url(#steel)" stroke="#eff6ff" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M359 143 338 151 167 320 183 338 352 164Z" fill="url(#steel)" stroke="#eff6ff" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M163 145 175 151 338 323 329 328Z" fill="#ffffff" opacity=".76"/>
-  <path d="M349 145 337 151 174 323 183 328Z" fill="#ffffff" opacity=".76"/>
-  <!-- Gold guards -->
-  <path d="M305 293 348 336 332 352 289 309Z" fill="url(#gold)" stroke="#8d5d1e" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M207 293 164 336 180 352 223 309Z" fill="url(#gold)" stroke="#8d5d1e" stroke-width="4" stroke-linejoin="round"/>
-  <!-- Wrapped grips -->
-  <path d="M333 337 357 361 340 378 316 354Z" fill="#8b5529" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M179 337 155 361 172 378 196 354Z" fill="#8b5529" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
-  <path d="M318 349 346 377M326 341 354 369M194 349 166 377M186 341 158 369" stroke="#edc667" stroke-width="3" stroke-linecap="round"/>
-  <!-- Pommel caps -->
-  <circle cx="348" cy="370" r="11" fill="url(#gold)" stroke="#fff0b6" stroke-width="3"/>
-  <circle cx="164" cy="370" r="11" fill="url(#gold)" stroke="#fff0b6" stroke-width="3"/>
-  <!-- Center crest -->
-  <path d="M256 218 267 242 293 245 274 263 279 289 256 276 233 289 238 263 219 245 245 242Z"
-        fill="url(#gold)" stroke="#fff0b6" stroke-width="3" stroke-linejoin="round"/>
-  <circle cx="256" cy="254" r="5" fill="#fff8dc"/>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <path d="M48 360h416v120H48z" fill="#243028"/>
+  <path d="M70 392h372l-20 70H96z" fill="#6a543c"/>
+  <circle cx="256" cy="168" r="28" fill="#f3efe6"/>
+  <path d="M256 196v86" stroke="#f3efe6" stroke-width="16" stroke-linecap="round"/>
+  <path d="M256 230l-48 54M256 230l52-10" stroke="#f3efe6" stroke-width="12" stroke-linecap="round"/>
+  <path d="M256 282l-36 78M256 282l40 74" stroke="#f3efe6" stroke-width="12" stroke-linecap="round"/>
+  <path d="M300 214l78-46" stroke="#eef3f8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M366 156l22 18-28 8z" fill="url(#gold)"/>
+  <rect x="214" y="236" width="28" height="18" rx="4" fill="#3d8bfd"/>
+  <circle cx="148" cy="300" r="18" fill="url(#gold)"/>
+  <path d="M132 312l32-8 6 16-30 10z" fill="#5c5348"/>
 </svg>

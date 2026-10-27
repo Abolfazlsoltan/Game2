@@ -1,22 +1,29 @@
 config_version=5
 
 [application]
+
 config/name="Small Warriors"
-config/icon="res://assets/app_icon.svg"
+config/description="Mine gold, command stick soldiers, and break the enemy statue."
+config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
-config/description="A polished, touch-friendly endless lane strategy game."
+config/features=PackedStringArray("4.5", "GL Compatibility")
+config/icon="res://assets/app_icon.svg"
+config/quit_on_go_back=false
 
 [display]
+
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/size/window_width_override=1280
-window/size/window_height_override=720
 window/stretch/mode="canvas_items"
-window/handheld/orientation=0
+window/handheld/orientation=4
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
 
 [rendering]
+
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.035, 0.055, 0.09, 1)
+environment/defaults/default_clear_color=Color(0.06, 0.075, 0.11, 1)
 textures/vram_compression/import_etc2_astc=true
