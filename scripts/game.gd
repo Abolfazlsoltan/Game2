@@ -313,6 +313,7 @@ func _spawn(side: int, kind: String) -> int:
 		"anim": rng.randf() * TAU, "flash": 0.0, "dead": 0.0,
 		"facing": 1.0 if side == 0 else -1.0,
 		"slot": rng.randf_range(-30.0, 30.0),
+		"moving": false,
 		"leap": 0.0, "leap_x": 0.0, "leap_y": 0.0,
 	})
 	return id
@@ -440,6 +441,7 @@ func _command(i: int, dt: float) -> void:
 	u["stun"] = maxf(0.0, float(u["stun"]) - dt)
 	u["flash"] = maxf(0.0, float(u["flash"]) - dt)
 	u["cd"] = maxf(0.0, float(u["cd"]) - dt)
+	u["moving"] = false
 	if float(u["dead"]) > 0.0:
 		units[i] = u
 		return
@@ -479,11 +481,13 @@ func _manual(u: Dictionary, dt: float, stick: Vector2) -> void:
 		v = v.normalized()
 	var speed := float(STATS[str(u["kind"])]["speed"])
 	if v.length() > 0.12:
+		var step_distance := speed * minf(1.0, v.length()) * dt
 		u["x"] = float(u["x"]) + v.x * speed * dt
 		u["y"] = float(u["y"]) + v.y * speed * 0.88 * dt
+		u["moving"] = true
 		if absf(v.x) > 0.2:
 			u["facing"] = 1.0 if v.x > 0.0 else -1.0
-		u["anim"] = float(u["anim"]) + dt * 11.0
+		u["anim"] = float(u["anim"]) + step_distance * 0.105
 	if str(u["kind"]) == "MINER" and action_held:
 		_dig(u, dt, true)
 		_try_attack(u)
@@ -601,9 +605,10 @@ func _walk(u: Dictionary, dest: Vector2, speed: float, dt: float) -> void:
 	var dirv := delta / dist
 	u["x"] = float(u["x"]) + dirv.x * step
 	u["y"] = float(u["y"]) + dirv.y * step
+	u["moving"] = true
 	if absf(dirv.x) > 0.12:
 		u["facing"] = 1.0 if dirv.x > 0.0 else -1.0
-	u["anim"] = float(u["anim"]) + dt * 10.0
+	u["anim"] = float(u["anim"]) + step * 0.105
 
 func _try_attack(u: Dictionary) -> bool:
 	if float(u["cd"]) > 0.0:
@@ -1362,7 +1367,7 @@ func _draw_stick(u: Dictionary) -> void:
 	var x := float(u["x"])
 	var y := float(u["y"])
 	var facing := float(u["facing"])
-	var walk := sin(float(u["anim"]))
+	var walk := sin(float(u["anim"])) if bool(u.get("moving", false)) else 0.0
 	var dead := float(u["dead"])
 	var team := BLUE if int(u["side"]) == 0 else RED
 	if dead > 0.0:
@@ -1377,20 +1382,49 @@ func _draw_stick(u: Dictionary) -> void:
 	var skin := BONE
 	if float(u["flash"]) > 0.0:
 		skin = Color("#ffb4b4")
-	var hip := Vector2(x, y - 16.0 * sc)
-	var chest := Vector2(x, y - 34.0 * sc)
-	var head := Vector2(x, y - 48.0 * sc)
-	var lw := 3.4 * sc
-	draw_line(hip, Vector2(x - (8.0 - walk * 7.0) * sc, y), skin.darkened(0.08), lw, true)
-	draw_line(hip, Vector2(x + (8.0 - walk * 7.0) * sc, y), skin.darkened(0.08), lw, true)
-	draw_line(hip, chest, skin, lw + 1.2, true)
-	draw_circle(head, 6.4 * sc, skin)
-	draw_circle(head + Vector2(facing * 2.2 * sc, -0.8 * sc), 1.15 * sc, Color("#1c1a17"))
-	draw_line(chest + Vector2(-3.0 * sc, 2.0), chest + Vector2(3.0 * sc, 8.0 * sc), team, 4.0 * sc, true)
-	var arm_f := Vector2(x + facing * (11.0 + walk * 2.0) * sc, y - 30.0 * sc)
-	var arm_b := Vector2(x - facing * 8.0 * sc, y - 28.0 * sc + walk * 2.0)
-	draw_line(chest, arm_b, skin, lw, true)
-	draw_line(chest, arm_f, skin, lw, true)
+	var idle_bob := sin(tick * 2.5 + float(u["id"])) * 0.7 if not bool(u.get("moving", false)) and dead <= 0.0 else 0.0
+	var bob := absf(walk) * 1.5 * sc + idle_bob
+	var hip := Vector2(x, y - 18.0 * sc + bob)
+	var chest := Vector2(x - facing * (1.0 + walk * 2.0) * sc, y - 35.0 * sc + bob)
+	var head := Vector2(chest.x + facing * 1.0 * sc, y - 49.0 * sc + bob)
+	var lw := 3.8 * sc
+	var foot_lift_a := maxf(0.0, cos(float(u["anim"]))) * 3.5 * sc if bool(u.get("moving", false)) else 0.0
+	var foot_lift_b := maxf(0.0, -cos(float(u["anim"]))) * 3.5 * sc if bool(u.get("moving", false)) else 0.0
+	var foot_a := Vector2(x - (7.0 + walk * 5.0) * sc, y - foot_lift_a)
+	var foot_b := Vector2(x + (7.0 + walk * 5.0) * sc, y - foot_lift_b)
+	var shadow := PackedVector2Array()
+	for j in 16:
+		var angle := TAU * float(j) / 16.0
+		shadow.append(Vector2(x + cos(angle) * 12.0 * sc, y + 1.5 + sin(angle) * 3.0 * sc))
+	draw_colored_polygon(shadow, Color(0.02, 0.03, 0.03, 0.32))
+	var knee_a := Vector2((hip.x + foot_a.x) * 0.5 + walk * 2.0 * sc, y - 9.0 * sc - foot_lift_a * 0.4)
+	var knee_b := Vector2((hip.x + foot_b.x) * 0.5 - walk * 2.0 * sc, y - 9.0 * sc - foot_lift_b * 0.4)
+	draw_line(hip + Vector2(-3.0 * sc, 0), knee_b, team.darkened(0.28), 5.0 * sc, true)
+	draw_line(knee_b, foot_b + Vector2(0, -1.5 * sc), skin.darkened(0.15), 3.8 * sc, true)
+	draw_circle(knee_b, 2.0 * sc, skin.darkened(0.1))
+	draw_line(hip + Vector2(3.0 * sc, 0), knee_a, team, 5.2 * sc, true)
+	draw_line(knee_a, foot_a + Vector2(0, -1.5 * sc), skin, 4.0 * sc, true)
+	draw_circle(knee_a, 2.2 * sc, skin)
+	draw_colored_polygon(PackedVector2Array([foot_b + Vector2(-4.0 * sc, 0), foot_b + Vector2(3.0 * sc, -1.5 * sc), foot_b + Vector2(6.0 * sc, 0), foot_b + Vector2(3.0 * sc, 1.5 * sc), foot_b + Vector2(-4.0 * sc, 1.5 * sc)]), Color("#252b30"))
+	draw_colored_polygon(PackedVector2Array([foot_a + Vector2(-4.0 * sc, 0), foot_a + Vector2(3.0 * sc, -1.5 * sc), foot_a + Vector2(6.0 * sc, 0), foot_a + Vector2(3.0 * sc, 1.5 * sc), foot_a + Vector2(-4.0 * sc, 1.5 * sc)]), Color("#3a4248"))
+	draw_colored_polygon(PackedVector2Array([chest + Vector2(-7.0 * sc, -2.0 * sc), chest + Vector2(5.0 * sc, -3.0 * sc), hip + Vector2(7.0 * sc, 2.0 * sc), hip + Vector2(4.0 * sc, 6.0 * sc), hip + Vector2(-6.0 * sc, 5.0 * sc), chest + Vector2(-8.0 * sc, 4.0 * sc)]), team.darkened(0.32))
+	draw_colored_polygon(PackedVector2Array([chest + Vector2(-5.0 * sc, -3.0 * sc), chest + Vector2(3.0 * sc, -4.0 * sc), hip + Vector2(4.0 * sc, 0), hip + Vector2(1.0 * sc, 4.0 * sc), hip + Vector2(-5.0 * sc, 3.0 * sc), chest + Vector2(-6.0 * sc, 3.0 * sc)]), team.lightened(0.08))
+	draw_line(hip + Vector2(-5.0 * sc, 1.0 * sc), hip + Vector2(5.0 * sc, 1.0 * sc), GOLD, 1.8 * sc, true)
+	var arm_f := Vector2(x + facing * (10.0 + walk * 2.5) * sc, y - 29.0 * sc + bob)
+	var arm_b := Vector2(x - facing * 8.0 * sc - walk * 2.5 * sc, y - 28.0 * sc - walk * 1.5 * sc + bob)
+	var elbow_f := arm_f + Vector2(facing * 2.0 * sc, 5.0 * sc)
+	var elbow_b := arm_b + Vector2(-facing * 1.0 * sc, 5.0 * sc)
+	draw_line(chest + Vector2(-facing * 5.0 * sc, 0), elbow_b, skin.darkened(0.1), lw, true)
+	draw_line(elbow_b, arm_b + Vector2(0, 5.0 * sc), skin, lw - 0.4, true)
+	draw_circle(elbow_b, 2.0 * sc, skin.darkened(0.1))
+	draw_line(chest + Vector2(facing * 5.0 * sc, 0), elbow_f, skin, lw, true)
+	draw_line(elbow_f, arm_f, skin, lw - 0.4, true)
+	draw_circle(elbow_f, 2.0 * sc, skin)
+	draw_colored_polygon(PackedVector2Array([chest + Vector2(-6.0 * sc, -2.0 * sc), chest + Vector2(-1.0 * sc, -4.0 * sc), chest + Vector2(2.0 * sc, 1.0 * sc), chest + Vector2(-5.0 * sc, 3.0 * sc)]), Color("#9ca8b4"))
+	draw_colored_polygon(PackedVector2Array([chest + Vector2(2.0 * sc, -4.0 * sc), chest + Vector2(7.0 * sc, -2.0 * sc), chest + Vector2(8.0 * sc, 2.0 * sc), chest + Vector2(3.0 * sc, 3.0 * sc)]), Color("#c3cbd2"))
+	draw_circle(head, 6.8 * sc, skin.darkened(0.16))
+	draw_circle(head + Vector2(-facing * 1.0 * sc, -0.8 * sc), 5.7 * sc, skin)
+	draw_circle(head + Vector2(facing * 2.2 * sc, -0.5 * sc), 1.0 * sc, Color("#1c1a17"))
 	_draw_weapon(kind, arm_f, facing, sc, walk, float(u["block"]))
 	if dead <= 0.0 and (float(u["hp"]) < float(u["max_hp"]) or int(u["id"]) == selected_id):
 		var ratio := clampf(float(u["hp"]) / float(u["max_hp"]), 0.0, 1.0)
