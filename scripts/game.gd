@@ -81,6 +81,10 @@ var miner_warned := false
 var sfx_players: Array[AudioStreamPlayer] = []
 var music: AudioStreamPlayer
 var sfx_streams := {}
+const Character3D = preload("res://scripts/presentation/character_3d.gd")
+var rig_viewports: Dictionary = {}
+var rig_characters: Dictionary = {}
+var rig_ready := false
 
 func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--validate-data"):
@@ -173,8 +177,11 @@ func _ready() -> void:
 			get_tree().quit(0)
 		return
 
+	_setup_3d_character_rigs()
+
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
+	_update_3d_character_rigs()
 	tick += dt
 	toast_t = maxf(0.0, toast_t - dt)
 	shake = maxf(0.0, shake - dt * 16.0)
@@ -1802,7 +1809,125 @@ func _draw_torso(hip: Vector2, neck: Vector2, facing: float, sc: float, team: Co
 		"MINER":
 			draw_line(shoulder + Vector2(-4.0 * sc, 2.0 * sc), waist + Vector2(3.0 * sc, -1.0 * sc), Color("#b98a49"), 2.0 * sc, true)
 
+
+func _role_for_kind(kind: String) -> String:
+	match kind:
+		"MINER": return "WORKER"
+		"ARCHER": return "SCOUT"
+		"MAGE": return "MYSTIC"
+		"GIANT": return "GIANT"
+		_: return "GUARD"
+
+func _setup_3d_character_rigs() -> void:
+	if rig_ready:
+		return
+	rig_ready = true
+	for side in 2:
+		for kind_value in KIND_ORDER:
+			var kind := str(kind_value)
+			var key := str(side) + "_" + kind
+			var viewport := SubViewport.new()
+			viewport.name = "RigViewport_" + key
+			viewport.size = Vector2i(80, 112)
+			viewport.transparent_bg = true
+			viewport.own_world_3d = true
+			viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+			add_child(viewport)
+			var world := WorldEnvironment.new()
+			var env := Environment.new()
+			env.background_mode = Environment.BG_COLOR
+			env.background_color = Color(0, 0, 0, 0)
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = Color("#c9d6e8")
+			env.ambient_light_energy = 0.8
+			world.environment = env
+			viewport.add_child(world)
+			var camera := Camera3D.new()
+			camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+			camera.size = 2.15
+			camera.position = Vector3(0, 1.0, 5.0)
+			camera.look_at(Vector3(0, 1.0, 0), Vector3.UP)
+			camera.current = true
+			viewport.add_child(camera)
+			var light := DirectionalLight3D.new()
+			light.rotation_degrees = Vector3(-28, -24, 0)
+			light.light_energy = 1.5
+			viewport.add_child(light)
+			var fill := OmniLight3D.new()
+			fill.position = Vector3(-2.0, 2.5, 2.0)
+			fill.light_energy = 0.45
+			fill.omni_range = 7.0
+			viewport.add_child(fill)
+			var team := BLUE if side == 0 else RED
+			var character = Character3D.new(_role_for_kind(kind), team)
+			character.name = "CharacterRig_" + key
+			character.scale.x = 1.0 if side == 0 else -1.0
+			viewport.add_child(character)
+			rig_viewports[key] = viewport
+			rig_characters[key] = character
+
+func _update_3d_character_rigs() -> void:
+	if not rig_ready:
+		return
+	for side in 2:
+		for kind_value in KIND_ORDER:
+			var kind := str(kind_value)
+			var key := str(side) + "_" + kind
+			var chosen: Dictionary = {}
+			for unit in units:
+				if int(unit.get("side", -1)) == side and str(unit.get("kind", "")) == kind and float(unit.get("dead", 0.0)) <= 0.0:
+					chosen = unit
+					break
+			var action := str(chosen.get("action", ""))
+			if action == "mine":
+				action = "work"
+			elif action == "cast":
+				action = "focus"
+			var action_len := maxf(0.05, float(chosen.get("action_len", 0.5)))
+			var progress := clampf(1.0 - float(chosen.get("action_t", 0.0)) / action_len, 0.0, 1.0)
+			rig_characters[key].animate_pose(
+				bool(chosen.get("moving", false)),
+				bool(chosen.get("run", false)),
+				float(chosen.get("anim", tick * 2.0)),
+				float(chosen.get("leap", 0.0)),
+				float(chosen.get("hurt_t", 0.0)),
+				float(chosen.get("stun", 0.0)) > 0.0,
+				action,
+				progress
+			)
+
+func _draw_3d_unit(u: Dictionary) -> bool:
+	if not rig_ready or float(u.get("dead", 0.0)) > 0.0:
+		return false
+	var key := str(int(u.get("side", 0))) + "_" + str(u.get("kind", "SWORD"))
+	if not rig_viewports.has(key):
+		return false
+	var texture: Texture2D = rig_viewports[key].get_texture()
+	if texture == null:
+		return false
+	var kind := str(u.get("kind", "SWORD"))
+	var scale_factor := float(STATS[kind]["scale"]) * (1.12 if kind == "GIANT" else 1.0)
+	var width := 46.0 * scale_factor
+	var height := 66.0 * scale_factor
+	var x := float(u.get("x", 0.0))
+	var y := float(u.get("y", 0.0))
+	var shadow := PackedVector2Array()
+	for i in 14:
+		var angle := TAU * float(i) / 14.0
+		shadow.append(Vector2(x + cos(angle) * width * 0.31, y + 2.0 + sin(angle) * 3.2))
+	draw_colored_polygon(shadow, Color(0, 0, 0, 0.24))
+	draw_texture_rect(texture, Rect2(x - width * 0.5, y - height, width, height), false)
+	if float(u.get("hp", 1.0)) < float(u.get("max_hp", 1.0)):
+		var ratio := clampf(float(u.get("hp", 1.0)) / maxf(1.0, float(u.get("max_hp", 1.0))), 0.0, 1.0)
+		draw_rect(Rect2(x - 17.0 * scale_factor, y - height - 5.0, 34.0 * scale_factor, 3.0), Color(0, 0, 0, 0.6))
+		draw_rect(Rect2(x - 17.0 * scale_factor, y - height - 5.0, 34.0 * scale_factor * ratio, 2.0), GREEN if int(u.get("side", 0)) == 0 else RED)
+	if int(u.get("id", -1)) == selected_id and int(u.get("side", -1)) == 0:
+		draw_arc(Vector2(x, y + 2.0), 18.0 * scale_factor, 0.0, TAU, 22, GOLD, 2.0, true)
+	return true
+
 func _draw_stick(u: Dictionary) -> void:
+	if _draw_3d_unit(u):
+		return
 	var kind := str(u["kind"])
 	var base_scale := float(STATS[kind]["scale"])
 	var sc := base_scale * (1.14 if kind == "GIANT" else 1.24)
