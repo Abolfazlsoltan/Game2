@@ -1610,7 +1610,7 @@ func _draw_shot(p: Dictionary) -> void:
 
 func _star(c: Vector2, r: float, color: Color) -> void:
 	var pts := PackedVector2Array()
-	for i in STAGES.size():
+	for i in 8:
 		var ang := -PI * 0.5 + float(i) * TAU / 8.0
 		var rad := r if i % 2 == 0 else r * 0.42
 		pts.append(c + Vector2(cos(ang), sin(ang)) * rad)
@@ -1991,7 +1991,7 @@ func _draw_result() -> void:
 		_text("هر موج سخت‌تر است؛ ارتش و منابع را بهتر مدیریت کن.", Vector2(410, 300), 15, MUTED)
 	elif game_mode == "tournament":
 		_text("مسابقات پنج‌دوره‌ای  ·  دور " + str(tournament_round) + "/5", Vector2(430, 256), 18, BONE)
-		_text("قهرمانی‌های ثبت‌شده: " + str(tournament_wins + (1 if won else 0)), Vector2(460, 300), 15, MUTED)
+		_text("قهرمانی‌های ثبت‌شده: " + str(tournament_wins), Vector2(460, 300), 15, MUTED)
 	else:
 		_text(_stage_name_fa(stage_i), Vector2(540, 248), 18, MUTED)
 		if won:
