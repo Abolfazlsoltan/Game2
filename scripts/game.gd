@@ -279,7 +279,7 @@ func _begin(index: int) -> void:
 	miner_warned = false
 	joy = Vector2.ZERO
 	action_held = false
-	_toast(str(stg["name"]))
+	_toast(_stage_name_fa(stage_i))
 
 func _finish() -> void:
 	var won := ending == "win"
@@ -1522,24 +1522,51 @@ func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, _walk: 
 		draw_line(hand, hand + Vector2(dir * 18.0 * sc, -16.0 * sc), Color("#e7edf4"), 2.6 * sc, true)
 		draw_line(hand + Vector2(dir * 14.0 * sc, -12.0 * sc), hand + Vector2(dir * 22.0 * sc, -20.0 * sc), GOLD, 2.0 * sc, true)
 
+func _stage_name_fa(index: int) -> String:
+	var names := ["راه غبارآلود", "درهٔ کمان", "صف سپرها", "محفل خاکستر", "راه سنگی", "دو پرچم", "سپاه شب", "تاج چوبین"]
+	return names[clampi(index, 0, names.size() - 1)]
+
+func _stage_blurb_fa(index: int) -> String:
+	var blurbs := [
+		"معدن‌چی‌ها را آموزش بده و از قلعه محافظت کن.",
+		"نیروهای تازه به گروهت می‌پیوندند.",
+		"ترکیب نیروها و زمان‌بندی را مدیریت کن.",
+		"در میدان مراقب جایگاه نیروها باش.",
+		"نیروهای سنگین وارد میدان می‌شوند.",
+		"دو گروه بزرگ برای پیروزی رقابت می‌کنند.",
+		"نبردی در آسمان تاریک پیش روست.",
+		"آخرین مرحلهٔ این مسیر را کامل کن."
+	]
+	return blurbs[clampi(index, 0, blurbs.size() - 1)]
+
+func _unit_name_fa(kind: String) -> String:
+	match kind:
+		"MINER": return "معدن‌چی"
+		"SWORD": return "شمشیرزن"
+		"ARCHER": return "کماندار"
+		"SPEAR": return "نیزه‌دار"
+		"MAGE": return "جادوگر"
+		"GIANT": return "غول"
+		_: return kind
+
 func _draw_battle_ui() -> void:
-	_text("SMALL WARRIORS", Vector2(124, 36), 15, GOLD)
-	_text(str(_stage()["name"]).to_upper(), Vector2(124, 56), 13, MUTED)
-	_pill(Rect2(430, 16, 200, 40), str(gold) + " GOLD", GOLD)
-	_pill(Rect2(646, 16, 150, 40), "POP " + str(_pop(0)) + "/" + str(int(_stage()["cap"])), BONE)
+	_text("جنگاوران کوچک", Vector2(124, 36), 17, GOLD)
+	_text(_stage_name_fa(stage_i), Vector2(124, 56), 13, MUTED)
+	_pill(Rect2(430, 16, 200, 40), str(gold) + " طلا", GOLD)
+	_pill(Rect2(646, 16, 150, 40), "جمعیت " + str(_pop(0)) + "/" + str(int(_stage()["cap"])), BONE)
 	_button(Rect2(24, 16, 86, 42), "II", MUTED, true)
 	_bar(Rect2(24, 78, 250, 10), player_hp / maxf(1.0, player_max), BLUE)
-	_text("YOUR STATUE  " + str(int(player_hp)), Vector2(24, 104), 12, MUTED)
+	_text("قلعهٔ شما  " + str(int(player_hp)), Vector2(24, 104), 12, MUTED)
 	_bar(Rect2(1006, 78, 250, 10), enemy_hp / maxf(1.0, enemy_max), RED)
-	_text("ENEMY  " + str(int(enemy_hp)), Vector2(1006, 104), 12, MUTED)
+	_text("دشمن  " + str(int(enemy_hp)), Vector2(1006, 104), 12, MUTED)
 	if not player_queue.is_empty():
 		var st: Dictionary = STATS[str(player_queue[0])]
 		var total := float(st["time"])
 		var ratio := clampf(player_train_t / maxf(0.1, total), 0.0, 1.0)
-		_text("Training " + str(st["name"]) + "  " + String.num(maxf(0.0, player_train_t), 1) + "s", Vector2(820, 48), 13, BONE)
+		_text("آموزش " + _unit_name_fa(str(player_queue[0])) + "  " + String.num(maxf(0.0, player_train_t), 1) + " ثانیه", Vector2(820, 48), 13, BONE)
 		_bar(Rect2(820, 54, 200, 6), 1.0 - ratio, GOLD)
 	for i in 3:
-		var names: Array = ["ATTACK", "DEFEND", "GARRISON"]
+		var names: Array = ["پیشروی", "دفاع", "بازگشت"]
 		var ids: Array = ["attack", "defend", "garrison"]
 		var on: bool = p_order == str(ids[i])
 		_button(_order_rect(i), names[i], GOLD if on else Color("#8d97a5"), true)
@@ -1550,17 +1577,17 @@ func _draw_battle_ui() -> void:
 	if toast_t > 0.0:
 		_pill(Rect2(390, 118, 500, 36), toast, Color("#d7e2ef"))
 	if hint_t > 0.0 and stage_i == 0:
-		_text("Drag the stick. Tap a soldier to control them. Miners haul gold.", Vector2(250, 168), 14, BONE)
+		_text("برای کنترل، یک نیرو را انتخاب کن. معدن‌چی‌ها طلا جمع می‌کنند.", Vector2(250, 168), 14, BONE)
 	if intro_t > 0.0:
 		draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
-		_text(str(_stage()["name"]).to_upper(), Vector2(430, 300), 36, GOLD)
-		_text(str(_stage()["blurb"]), Vector2(360, 346), 18, BONE)
+		_text(_stage_name_fa(stage_i), Vector2(430, 300), 32, GOLD)
+		_text(_stage_blurb_fa(stage_i), Vector2(360, 346), 18, BONE)
 	if paused:
 		draw_rect(Rect2(0, 0, W, H), Color(0.02, 0.03, 0.05, 0.78))
-		_text("PAUSED", Vector2(560, 250), 32, BONE)
-		_button(Rect2(470, 300, 340, 52), "RESUME", GOLD, true)
-		_button(Rect2(470, 364, 340, 52), "RETRY BATTLE", BLUE, true)
-		_button(Rect2(470, 428, 340, 52), "CAMPAIGN MAP", MUTED, true)
+		_text("بازی متوقف شد", Vector2(520, 250), 30, BONE)
+		_button(Rect2(470, 300, 340, 52), "ادامهٔ بازی", GOLD, true)
+		_button(Rect2(470, 364, 340, 52), "شروع دوباره", BLUE, true)
+		_button(Rect2(470, 428, 340, 52), "نقشهٔ مراحل", MUTED, true)
 	if screen == "result":
 		_draw_result()
 
@@ -1572,7 +1599,7 @@ func _draw_train(i: int) -> void:
 	var afford := gold >= int(st["cost"]) and _pop(0) + int(st["pop"]) <= int(_stage()["cap"])
 	var accent := GOLD if on and afford else Color("#5c6570")
 	_button(rect, "", accent, on)
-	_text(str(st["name"]).to_upper(), rect.position + Vector2(10, 24), 14, BONE if on else MUTED)
+	_text(_unit_name_fa(kind), rect.position + Vector2(10, 24), 14, BONE if on else MUTED)
 	_text(str(int(st["cost"])) + "g  ·  " + str(int(st["pop"])), rect.position + Vector2(10, 46), 12, GOLD if on and afford else Color("#a86868"))
 
 func _draw_joy() -> void:
@@ -1595,7 +1622,7 @@ func _draw_action() -> void:
 	draw_arc(c, 36, 0, TAU, 28, GOLD if ready else MUTED, 3.0, true)
 	if frac > 0.0:
 		draw_arc(c, 30, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 24, Color("#3d8bfd"), 4.0, true)
-	_text("ACT", c + Vector2(-16, 5), 16, BONE if ready else MUTED)
+	_text("مهارت", c + Vector2(-22, 5), 14, BONE if ready else MUTED)
 
 func _ability_max(kind: String) -> float:
 	match kind:
@@ -1619,24 +1646,24 @@ func _draw_menu() -> void:
 	_draw_stick({"id": -10, "side": 0, "kind": "SWORD", "x": 860, "y": 540, "hp": 10, "max_hp": 10, "anim": tick * 7.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0})
 	_draw_stick({"id": -11, "side": 0, "kind": "ARCHER", "x": 800, "y": 560, "hp": 10, "max_hp": 10, "anim": tick * 7.0 + 1.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0})
 	_draw_stick({"id": -12, "side": 1, "kind": "SPEAR", "x": 960, "y": 548, "hp": 10, "max_hp": 10, "anim": tick * 6.0, "facing": -1.0, "dead": 0.0, "flash": 0.0, "block": 0.4, "bag": 0.0, "slot": 0.0})
-	_text("SMALL WARRIORS", Vector2(78, 120), 18, GOLD)
-	_text("STICK LEGION", Vector2(76, 188), 54, BONE)
-	_text("Mine the vein. Command the line. Break the statue.", Vector2(80, 230), 16, MUTED)
-	_button(Rect2(78, 360, 280, 64), "CAMPAIGN", GOLD, true)
-	_button(Rect2(78, 440, 280, 54), "HOW TO PLAY", Color("#8d97a5"), true)
-	_button(Rect2(78, 508, 280, 48), "SOUND  " + ("ON" if sfx_on else "OFF"), Color("#8d97a5"), true)
+	_text("جنگاوران کوچک", Vector2(78, 120), 18, GOLD)
+	_text("لشکر کوچک", Vector2(76, 188), 50, BONE)
+	_text("منابع جمع کن، نیروها را مدیریت کن و مراحل را پیش ببر.", Vector2(80, 230), 16, MUTED)
+	_button(Rect2(78, 360, 280, 64), "مراحل داستانی", GOLD, true)
+	_button(Rect2(78, 440, 280, 54), "راهنمای بازی", Color("#8d97a5"), true)
+	_button(Rect2(78, 508, 280, 48), "صدا  " + ("روشن" if sfx_on else "خاموش"), Color("#8d97a5"), true)
 	var total := 0
 	for s in stars:
 		total += int(s)
-	_text("BATTLES WON  " + str(wins) + "    STARS  " + str(total) + "/24", Vector2(80, 590), 14, MUTED)
+	_text("پیروزی‌ها  " + str(wins) + "    ستاره‌ها  " + str(total) + "/24", Vector2(80, 590), 14, MUTED)
 	_text("VERSION 0.3.0", Vector2(80, 680), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
 	draw_rect(Rect2(0, 0, W, H), Color(0.04, 0.05, 0.08, 0.35))
-	_button(Rect2(40, 28, 140, 44), "BACK", MUTED, true)
-	_text("CAMPAIGN", Vector2(210, 58), 28, GOLD)
-	_text("Eight battles. New troops join as you win.", Vector2(420, 58), 16, MUTED)
+	_button(Rect2(40, 28, 140, 44), "بازگشت", MUTED, true)
+	_text("مراحل داستانی", Vector2(210, 58), 26, GOLD)
+	_text("با پیروزی، مراحل و نیروهای تازه باز می‌شوند.", Vector2(420, 58), 16, MUTED)
 	for i in 8:
 		var rect := _stage_rect(i)
 		var open := i < unlocked
@@ -1644,13 +1671,13 @@ func _draw_map() -> void:
 		draw_rect(rect, Color(0.07, 0.09, 0.12, 0.92))
 		draw_rect(rect, GOLD if open else Color("#3c4450"), false, 2.0)
 		_text(str(i + 1).pad_zeros(2), rect.position + Vector2(16, 36), 18, GOLD if open else MUTED)
-		_text(str(stg["name"]).to_upper(), rect.position + Vector2(16, 78), 20, BONE if open else MUTED)
-		_text(str(stg["blurb"]), rect.position + Vector2(16, 112), 13, MUTED)
+		_text(_stage_name_fa(i), rect.position + Vector2(16, 78), 17, BONE if open else MUTED)
+		_text(_stage_blurb_fa(i), rect.position + Vector2(16, 112), 12, MUTED)
 		if open:
 			for k in 3:
 				_gem(rect.position + Vector2(28 + k * 26, 168), int(stars[i]) > k)
 		else:
-			_text("LOCKED", rect.position + Vector2(16, 172), 14, Color("#6a7380"))
+			_text("قفل است", rect.position + Vector2(16, 172), 14, Color("#6a7380"))
 
 func _draw_help() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color("#121820"))
@@ -1675,17 +1702,17 @@ func _draw_help() -> void:
 func _draw_result() -> void:
 	var won := ending == ""
 	draw_rect(Rect2(0, 0, W, H), Color(0.03, 0.04, 0.06, 0.72))
-	_text("STATUE BROKEN" if won else "YOUR STATUE FELL", Vector2(400, 200), 36, GOLD if won else RED)
-	_text(str(_stage()["name"]), Vector2(540, 248), 18, MUTED)
+	_text("پیروزی!" if won else "شکست", Vector2(500, 200), 36, GOLD if won else RED)
+	_text(_stage_name_fa(stage_i), Vector2(540, 248), 18, MUTED)
 	if won:
 		for k in 3:
 			_gem(Vector2(560 + k * 48, 300), result_stars > k)
-		_text("The road opens forward.", Vector2(500, 380), 16, BONE)
+		_text("مرحلهٔ بعدی باز شد.", Vector2(500, 380), 16, BONE)
 	else:
-		_text("Train more miners before you commit the army.", Vector2(420, 320), 16, BONE)
-	_button(Rect2(430, 470, 420, 56), "NEXT BATTLE" if won and stage_i + 1 < 8 else ("CAMPAIGN" if won else "TRY AGAIN"), GOLD, true)
-	_button(Rect2(430, 538, 200, 48), "RETRY", BLUE, true)
-	_button(Rect2(650, 538, 200, 48), "MAP", MUTED, true)
+		_text("نیروها و منابع را بهتر مدیریت کن و دوباره تلاش کن.", Vector2(420, 320), 16, BONE)
+	_button(Rect2(430, 470, 420, 56), "مرحلهٔ بعد" if won and stage_i + 1 < 8 else ("نقشهٔ مراحل" if won else "تلاش دوباره"), GOLD, true)
+	_button(Rect2(430, 538, 200, 48), "تکرار", BLUE, true)
+	_button(Rect2(650, 538, 200, 48), "نقشه", MUTED, true)
 
 func _gem(center: Vector2, filled: bool) -> void:
 	var r := 8.0
