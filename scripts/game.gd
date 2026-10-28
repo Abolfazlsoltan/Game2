@@ -1488,7 +1488,7 @@ func _draw_stick(u: Dictionary) -> void:
 	draw_circle(head, 6.8 * sc, skin.darkened(0.16))
 	draw_circle(head + Vector2(-facing * 1.0 * sc, -0.8 * sc), 5.7 * sc, skin)
 	draw_circle(head + Vector2(facing * 2.2 * sc, -0.5 * sc), 1.0 * sc, Color("#1c1a17"))
-	_draw_weapon(kind, arm_f, facing, sc, walk, float(u["block"]))
+	_draw_weapon(kind, arm_f, facing, sc, float(u["anim"]) if kind == "MINER" else walk, float(u["block"]))
 	if dead <= 0.0 and (float(u["hp"]) < float(u["max_hp"]) or int(u["id"]) == selected_id):
 		var ratio := clampf(float(u["hp"]) / float(u["max_hp"]), 0.0, 1.0)
 		draw_rect(Rect2(x - 16, y - 66.0 * sc, 32, 3.5), Color(0, 0, 0, 0.55))
@@ -1496,11 +1496,19 @@ func _draw_stick(u: Dictionary) -> void:
 	if kind == "MINER" and float(u["bag"]) > 2.0 and dead <= 0.0:
 		_text(str(int(u["bag"])), Vector2(x - 8, y - 78.0 * sc), 11, GOLD)
 
-func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, _walk: float, block: float) -> void:
+func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, anim_phase: float, block: float) -> void:
 	var dir := facing
 	if kind == "MINER":
-		draw_line(hand, hand + Vector2(dir * 16.0 * sc, -14.0 * sc), Color("#8a6a45"), 3.0 * sc, true)
-		draw_line(hand + Vector2(dir * 10.0 * sc, -8.0 * sc), hand + Vector2(dir * 22.0 * sc, -2.0 * sc), Color("#d9dde3"), 3.0 * sc, true)
+		var swing := sin(anim_phase) * 0.7
+		var tool_tip := hand + Vector2(dir * (15.0 + swing * 4.0) * sc, (-12.0 - absf(swing) * 8.0) * sc)
+		draw_line(hand, tool_tip, Color("#5c3d29"), 3.5 * sc, true)
+		draw_line(hand + Vector2(dir * 2.0 * sc, 1.0 * sc), tool_tip, Color("#a67b4e"), 1.2 * sc, true)
+		draw_colored_polygon(PackedVector2Array([
+			tool_tip + Vector2(-2.0 * sc, -3.0 * sc), tool_tip + Vector2(4.0 * sc, -5.0 * sc),
+			tool_tip + Vector2(10.0 * sc, -2.0 * sc), tool_tip + Vector2(7.0 * sc, 2.0 * sc),
+			tool_tip + Vector2(1.0 * sc, 1.0 * sc)
+		]), Color("#aeb7c0"))
+		draw_line(tool_tip + Vector2(1.0 * sc, -2.0 * sc), tool_tip + Vector2(8.0 * sc, -3.0 * sc), Color("#edf2f5"), 1.0 * sc, true)
 	elif kind == "ARCHER":
 		draw_arc(hand + Vector2(dir * 8.0 * sc, 0), 11.0 * sc, -1.2, 1.2, 10, Color("#e8d7b0"), 1.8 * sc, true)
 		draw_line(hand + Vector2(dir * 8.0 * sc, -11.0 * sc), hand + Vector2(dir * 8.0 * sc, 11.0 * sc), Color("#f4efe4"), 1.0)
@@ -1643,9 +1651,9 @@ func _draw_menu() -> void:
 	_draw_sky()
 	_draw_ground()
 	_draw_statue(1040, 1.0, true)
-	_draw_stick({"id": -10, "side": 0, "kind": "SWORD", "x": 860, "y": 540, "hp": 10, "max_hp": 10, "anim": tick * 7.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0})
-	_draw_stick({"id": -11, "side": 0, "kind": "ARCHER", "x": 800, "y": 560, "hp": 10, "max_hp": 10, "anim": tick * 7.0 + 1.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0})
-	_draw_stick({"id": -12, "side": 1, "kind": "SPEAR", "x": 960, "y": 548, "hp": 10, "max_hp": 10, "anim": tick * 6.0, "facing": -1.0, "dead": 0.0, "flash": 0.0, "block": 0.4, "bag": 0.0, "slot": 0.0})
+	_draw_stick({"id": -10, "side": 0, "kind": "SWORD", "x": 860, "y": 540, "hp": 10, "max_hp": 10, "anim": tick * 7.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0, "moving": true})
+	_draw_stick({"id": -11, "side": 0, "kind": "ARCHER", "x": 800, "y": 560, "hp": 10, "max_hp": 10, "anim": tick * 7.0 + 1.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0, "moving": true})
+	_draw_stick({"id": -12, "side": 1, "kind": "SPEAR", "x": 960, "y": 548, "hp": 10, "max_hp": 10, "anim": tick * 6.0, "facing": -1.0, "dead": 0.0, "flash": 0.0, "block": 0.4, "bag": 0.0, "slot": 0.0, "moving": true})
 	_text("جنگاوران کوچک", Vector2(78, 120), 18, GOLD)
 	_text("لشکر کوچک", Vector2(76, 188), 50, BONE)
 	_text("منابع جمع کن، نیروها را مدیریت کن و مراحل را پیش ببر.", Vector2(80, 230), 16, MUTED)
@@ -1681,23 +1689,22 @@ func _draw_map() -> void:
 
 func _draw_help() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color("#121820"))
-	_text("HOW TO COMMAND", Vector2(78, 78), 32, GOLD)
+	_text("راهنمای بازی", Vector2(78, 78), 32, GOLD)
 	var lines := [
-		"Miners walk to the center vein, fill a sack, and carry gold home.",
-		"Train troops along the bottom. Population is capped for the battle.",
-		"ATTACK sends the army at their statue. Miners keep working.",
-		"DEFEND holds your half of the field and fights anything that arrives.",
-		"GARRISON pulls everyone back, miners included.",
-		"Tap a soldier to take control. The left stick moves them. WASD works too.",
-		"The right button is their skill. Controlled soldiers hit harder.",
-		"Sword leaps. Archer fires a heavy shot. Spear raises a shield.",
-		"Mage bursts a group. Giant slams the ground. Hold the button on a miner to dig faster.",
-		"Keys: 1-6 train, F attack, G defend, H garrison, J or Space for the skill.",
-		"If your statue falls, the battle is lost. Theirs falls, you win.",
+		"معدن‌چی به معدن می‌رود، طلا جمع می‌کند و آن را به پایگاه می‌آورد.",
+		"از نوار پایین برای آموزش نیروها استفاده کن؛ جمعیت محدود است.",
+		"دستورهای ارتش را از بالای صفحه انتخاب کن و وضعیت میدان را زیر نظر بگیر.",
+		"برای کنترل مستقیم، روی یکی از نیروهای خودت ضربه بزن.",
+		"جوی‌استیک سمت چپ برای حرکت است؛ در رایانه می‌توانی از کلیدهای WASD استفاده کنی.",
+		"دکمهٔ سمت راست، مهارت ویژهٔ نیروی انتخاب‌شده را فعال می‌کند.",
+		"هر نوع نیرو ویژگی‌های متفاوتی دارد؛ ترکیب مناسب را با توجه به مرحله انتخاب کن.",
+		"با جمع‌آوری طلا و مدیریت زمان آموزش، گروهت را تقویت کن.",
+		"اگر قلعهٔ تو از بین برود، مرحله را می‌بازی؛ هدف هر مرحله را بررسی کن.",
+		"برای مکث یا ادامهٔ بازی از دکمهٔ بالای سمت چپ استفاده کن.",
 	]
 	for i in lines.size():
 		_text(lines[i], Vector2(82, 130 + i * 42), 16, BONE)
-	_button(Rect2(78, 640, 240, 52), "BACK", MUTED, true)
+	_button(Rect2(78, 640, 240, 52), "بازگشت", MUTED, true)
 
 func _draw_result() -> void:
 	var won := ending == ""
