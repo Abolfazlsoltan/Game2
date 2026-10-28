@@ -1289,12 +1289,30 @@ func _draw_sky() -> void:
 	var cols: Array = _sky_colors()
 	var top: Color = cols[0]
 	var bot: Color = cols[1]
-	for i in 16:
-		var t := float(i) / 16.0
-		draw_rect(Rect2(-30, t * 430.0 - 10.0, W + 60.0, 40.0), top.lerp(bot, t))
-	draw_circle(Vector2(980, 120), 46, Color(1, 0.92, 0.75, 0.85 if int(_stage()["sky"]) != 5 else 0.25))
-	draw_colored_polygon(PackedVector2Array([Vector2(-20, 390), Vector2(220, 300), Vector2(420, 400)]), Color(0.1, 0.13, 0.18, 0.45))
-	draw_colored_polygon(PackedVector2Array([Vector2(860, 400), Vector2(1080, 280), Vector2(1320, 410)]), Color(0.08, 0.1, 0.14, 0.4))
+	for i in 24:
+		var t := float(i) / 24.0
+		draw_rect(Rect2(-30, t * 430.0 - 10.0, W + 60.0, 24.0), top.lerp(bot, t))
+	var night := int(_stage()["sky"]) == 5
+	var sun_col := Color("#fff0c7") if not night else Color("#b8c8f0")
+	draw_circle(Vector2(1000, 118), 54, Color(sun_col.r, sun_col.g, sun_col.b, 0.10))
+	draw_circle(Vector2(1000, 118), 39, Color(sun_col.r, sun_col.g, sun_col.b, 0.82))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-40, 382), Vector2(110, 328), Vector2(218, 354), Vector2(350, 292),
+		Vector2(488, 370), Vector2(620, 334), Vector2(770, 382), Vector2(930, 315),
+		Vector2(1080, 352), Vector2(1210, 302), Vector2(1320, 380), Vector2(1320, 440), Vector2(-40, 440)
+	]), Color("#283747"))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(-30, 408), Vector2(170, 358), Vector2(330, 398), Vector2(490, 346),
+		Vector2(650, 402), Vector2(830, 356), Vector2(1020, 404), Vector2(1180, 360),
+		Vector2(1320, 410), Vector2(1320, 450), Vector2(-30, 450)
+	]), Color("#34443f"))
+	for ruin_x in [76.0, 414.0, 856.0, 1190.0]:
+		draw_rect(Rect2(ruin_x, 365, 18, 48), Color("#27323a"))
+		draw_rect(Rect2(ruin_x - 5, 358, 28, 8), Color("#3e4b50"))
+		draw_line(Vector2(ruin_x + 9, 343), Vector2(ruin_x + 9, 368), Color("#7d6a52"), 2.0)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(ruin_x + 10, 344), Vector2(ruin_x + 28, 350), Vector2(ruin_x + 10, 357)
+		]), BLUE if ruin_x < 640.0 else RED)
 
 func _draw_ground() -> void:
 	draw_rect(Rect2(-30, 400, W + 60, 340), Color("#202b2a"))
@@ -1341,15 +1359,60 @@ func _draw_mine() -> void:
 
 func _draw_statue(x: float, ratio: float, friendly: bool) -> void:
 	var team := BLUE if friendly else RED
-	draw_rect(Rect2(x - 46, 470, 92, 78), Color("#2a313c"))
-	draw_rect(Rect2(x - 34, 392, 68, 86), Color("#3e4654"))
-	draw_rect(Rect2(x - 46, 376, 92, 18), Color("#2c333e"))
-	draw_colored_polygon(PackedVector2Array([Vector2(x, 318), Vector2(x + 16, 352), Vector2(x, 366), Vector2(x - 16, 352)]), team.lerp(GOLD, 0.35))
-	draw_rect(Rect2(x - 40, 500, 80 * clampf(ratio, 0.0, 1.0), 6), team)
-	if ratio < 0.66:
-		draw_line(Vector2(x - 10, 400), Vector2(x + 8, 450), Color(0, 0, 0, 0.45), 2.0)
-	if ratio < 0.33:
-		draw_line(Vector2(x + 12, 410), Vector2(x - 6, 468), Color(0, 0, 0, 0.55), 2.0)
+	var stone := Color("#59616b") if friendly else Color("#63504f")
+	var shade := stone.darkened(0.28)
+	var light := stone.lightened(0.18)
+	# Perspective base and layered stone keep.
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 70, 548), Vector2(x - 52, 530), Vector2(x + 57, 530),
+		Vector2(x + 76, 548), Vector2(x + 64, 564), Vector2(x - 61, 564)
+	]), Color("#171f24", 0.72))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 54, 388), Vector2(x + 42, 388), Vector2(x + 58, 410),
+		Vector2(x + 58, 522), Vector2(x - 54, 522)
+	]), stone)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x + 42, 388), Vector2(x + 59, 408), Vector2(x + 59, 522), Vector2(x + 42, 522)
+	]), shade)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 64, 383), Vector2(x - 43, 366), Vector2(x + 48, 366),
+		Vector2(x + 62, 383), Vector2(x + 47, 397), Vector2(x - 52, 397)
+	]), light)
+	draw_rect(Rect2(x - 58, 402, 103, 18), shade)
+	for row in 4:
+		for col in 3:
+			var bx := x - 42.0 + float(col) * 30.0 + (8.0 if row % 2 == 1 else 0.0)
+			var by := 427.0 + float(row) * 25.0
+			draw_rect(Rect2(bx, by, 24, 18), Color("#f0d7a4", 0.07), false, 1.0)
+	for seam_y in [424.0, 450.0, 477.0, 503.0]:
+		draw_line(Vector2(x - 49, seam_y), Vector2(x + 39, seam_y), Color("#c2b59d", 0.36), 1.5)
+	# Tall central tower, crenellations and deep-set gate.
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x - 33, 388), Vector2(x - 28, 341), Vector2(x - 15, 329),
+		Vector2(x + 24, 329), Vector2(x + 37, 341), Vector2(x + 42, 388)
+	]), stone.lightened(0.06))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x + 24, 329), Vector2(x + 42, 341), Vector2(x + 42, 388), Vector2(x + 24, 388)
+	]), shade)
+	draw_rect(Rect2(x - 34, 348, 78, 9), shade)
+	for crenel in 5:
+		var cx := x - 31.0 + float(crenel) * 17.0
+		draw_rect(Rect2(cx, 334, 11, 15), light if crenel % 2 == 0 else stone)
+	draw_rect(Rect2(x - 13, 361, 23, 27), Color("#222a31"))
+	draw_arc(Vector2(x - 1.5, 362), 11.5, PI, TAU, 16, Color("#b9a98a"), 2.0, true)
+	draw_rect(Rect2(x - 8, 369, 13, 19), Color("#111a20"))
+	draw_line(Vector2(x - 2, 369), Vector2(x - 2, 387), Color("#8f7651"), 1.0)
+	# Original team pennant and bright core.
+	draw_line(Vector2(x + 4, 296), Vector2(x + 4, 337), Color("#a88a5d"), 3.0, true)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x + 5, 298), Vector2(x + 31, 306), Vector2(x + 5, 319)
+	]), team)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x, 310), Vector2(x + 10, 322), Vector2(x, 334), Vector2(x - 10, 322)
+	]), team.lerp(GOLD, 0.38))
+	draw_line(Vector2(x - 48, 543), Vector2(x + 48, 543), Color("#d7bd8b", 0.45), 2.0)
+	draw_rect(Rect2(x - 44, 574, 88, 8), Color(0, 0, 0, 0.62))
+	draw_rect(Rect2(x - 42, 576, 84.0 * clampf(ratio, 0.0, 1.0), 4), team)
 
 func _draw_shot(p: Dictionary) -> void:
 	var a := Vector2(float(p["x"]), float(p["y"]))
