@@ -1292,16 +1292,35 @@ func _draw_sky() -> void:
 	draw_colored_polygon(PackedVector2Array([Vector2(860, 400), Vector2(1080, 280), Vector2(1320, 410)]), Color(0.08, 0.1, 0.14, 0.4))
 
 func _draw_ground() -> void:
-	draw_rect(Rect2(-30, 400, W + 60, 340), Color("#243028"))
+	draw_rect(Rect2(-30, 400, W + 60, 340), Color("#202b2a"))
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(80, 470), Vector2(1200, 455), Vector2(1220, 600), Vector2(60, 610)
-	]), Color("#3d4a34"))
+		Vector2(-20, 428), Vector2(1300, 420), Vector2(1300, 720), Vector2(-20, 720)
+	]), Color("#354238"))
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(140, 500), Vector2(1140, 492), Vector2(1120, 575), Vector2(160, 582)
-	]), Color("#6a543c"))
+		Vector2(70, 465), Vector2(1210, 450), Vector2(1250, 612), Vector2(35, 624)
+	]), Color("#46513a"))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(112, 491), Vector2(1168, 483), Vector2(1185, 579), Vector2(94, 590)
+	]), Color("#72583e"))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(112, 491), Vector2(1168, 483), Vector2(1160, 496), Vector2(104, 505)
+	]), Color("#9a7952"))
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(94, 590), Vector2(1185, 579), Vector2(1220, 620), Vector2(62, 635)
+	]), Color("#26352e"))
+	for i in 25:
+		var x := 36.0 + float(i) * 51.0
+		var y := 438.0 + sin(float(i) * 1.7) * 7.0
+		draw_line(Vector2(x, y + 8.0), Vector2(x + 5.0, y - 1.0), Color("#74835a", 0.65), 2.0)
 	for i in 18:
-		var x := 90.0 + float(i) * 64.0
-		draw_line(Vector2(x, 430), Vector2(x + 10, 448), Color(0.25, 0.38, 0.22, 0.7), 2.0)
+		var x := 122.0 + float(i) * 59.0
+		var y := 522.0 + sin(float(i) * 2.3) * 22.0
+		var stone := Color("#8a7357") if i % 2 == 0 else Color("#665943")
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(x - 12, y), Vector2(x - 5, y - 4), Vector2(x + 11, y - 3),
+			Vector2(x + 15, y + 2), Vector2(x + 1, y + 5), Vector2(x - 10, y + 4)
+		]), stone)
+	draw_line(Vector2(40, 635), Vector2(1240, 619), Color("#66735a", 0.7), 2.0)
 
 func _draw_mine() -> void:
 	var bob := sin(tick * 3.0) * 2.0
