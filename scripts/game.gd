@@ -34,7 +34,7 @@ var screen := "menu"
 var paused := false
 var sfx_on := true
 var unlocked := 1
-var stars: Array = [0, 0, 0, 0, 0, 0, 0, 0]
+var stars: Array = []
 var wins := 0
 var stage_i := 0
 var gold := 0
@@ -191,7 +191,7 @@ func _load_save() -> void:
 	unlocked = int(progress.get("unlocked", 1))
 	wins = int(progress.get("wins", 0))
 	sfx_on = bool(progress.get("sfx_on", true))
-	stars = progress.get("stars", [0, 0, 0, 0, 0, 0, 0, 0])
+	stars = progress.get("stars", [])
 
 func _save_game() -> void:
 	var progress := {
@@ -296,7 +296,7 @@ func _finish() -> void:
 			result_stars = 3
 		if int(stars[stage_i]) < result_stars:
 			stars[stage_i] = result_stars
-		if stage_i + 1 >= unlocked and unlocked < 8:
+		if stage_i + 1 >= unlocked and unlocked < STAGES.size():
 			unlocked = stage_i + 2
 		wins += 1
 	screen = "result"
@@ -1210,7 +1210,7 @@ func _hit_button(p: Vector2) -> String:
 	elif screen == "map":
 		if Rect2(40, 28, 140, 44).has_point(p):
 			return "back_menu"
-		for i in 8:
+		for i in STAGES.size():
 			if _stage_rect(i).has_point(p):
 				return "stage_" + str(i)
 	elif screen == "result":
@@ -1251,7 +1251,7 @@ func _train_rect(i: int) -> Rect2:
 func _stage_rect(i: int) -> Rect2:
 	var col := i % 4
 	var row := int(i / 4.0)
-	return Rect2(70.0 + float(col) * 300.0, 150.0 + float(row) * 230.0, 276.0, 200.0)
+	return Rect2(70.0 + float(col) * 300.0, 108.0 + float(row) * 184.0, 276.0, 162.0)
 
 func _draw() -> void:
 	var viewport_size := get_viewport_rect().size
@@ -1443,7 +1443,7 @@ func _draw_shot(p: Dictionary) -> void:
 
 func _star(c: Vector2, r: float, color: Color) -> void:
 	var pts := PackedVector2Array()
-	for i in 8:
+	for i in STAGES.size():
 		var ang := -PI * 0.5 + float(i) * TAU / 8.0
 		var rad := r if i % 2 == 0 else r * 0.42
 		pts.append(c + Vector2(cos(ang), sin(ang)) * rad)
@@ -1476,7 +1476,8 @@ func _draw_stick(u: Dictionary) -> void:
 		return
 	var swing_t := float(u.get("swing", 0.0))
 	var step := sin(phase) if moving or (kind == "MINER" and swing_t <= 0.0) else 0.0
-	var bob := absf(step) * 2.2 * sc
+	var breathe := 0.8 * sin(tick * 2.5 + float(u.get("id", 0))) if not moving else 0.0
+	var bob := absf(step) * 2.2 * sc + breathe * sc
 	var hip := Vector2(x, y - 17.0 * sc - bob)
 	var neck := Vector2(x - facing * step * 1.2 * sc, y - 40.0 * sc - bob)
 	var head := Vector2(neck.x + facing * 0.6 * sc, y - 50.0 * sc - bob)
@@ -1499,6 +1500,23 @@ func _draw_stick(u: Dictionary) -> void:
 	_limb(hip, knee_a, foot_a, ink, 3.3 * sc)
 	draw_line(hip, neck, team, 6.2 * sc, true)
 	draw_line(hip, neck, ink, 3.1 * sc, true)
+	# Original armour details make roles easier to distinguish at small screen sizes.
+	var chest := hip.lerp(neck, 0.55)
+	if kind == "SWORD":
+		draw_colored_polygon(PackedVector2Array([chest + Vector2(-5, -4) * sc, chest + Vector2(4, -5) * sc, chest + Vector2(6, 5) * sc, chest + Vector2(-3, 6) * sc]), Color("#b9c6d4"))
+		draw_line(chest + Vector2(-2, -3) * sc, chest + Vector2(2, 4) * sc, Color("#eef4fa"), 1.0 * sc, true)
+	elif kind == "ARCHER":
+		draw_line(chest + Vector2(-4, -2) * sc, chest + Vector2(4, 3) * sc, Color("#b58955"), 2.2 * sc, true)
+		draw_circle(chest + Vector2(1, 0) * sc, 2.0 * sc, Color("#e8d7b0"))
+	elif kind == "SPEAR":
+		draw_colored_polygon(PackedVector2Array([chest + Vector2(-5, -5) * sc, chest + Vector2(5, -3) * sc, chest + Vector2(5, 5) * sc, chest + Vector2(-2, 6) * sc]), Color("#9d5141"))
+		draw_line(chest + Vector2(-3, -2) * sc, chest + Vector2(3, 3) * sc, GOLD, 1.2 * sc, true)
+	elif kind == "MAGE":
+		draw_line(chest + Vector2(-4, 1) * sc, chest + Vector2(3, -2) * sc, Color("#a994cf"), 2.4 * sc, true)
+		draw_circle(chest + Vector2(2, -1) * sc, 2.3 * sc, Color("#9ec2ff"))
+	elif kind == "GIANT":
+		draw_line(hip + Vector2(-7, -4) * sc, neck + Vector2(-4, 5) * sc, Color("#8d8378"), 5.0 * sc, true)
+		draw_line(hip + Vector2(7, -3) * sc, neck + Vector2(5, 4) * sc, Color("#b8aca0"), 3.2 * sc, true)
 	var strike := 0.0
 	if swing_t > 0.0:
 		strike = sin(clampf((0.28 - swing_t) / 0.28, 0.0, 1.0) * PI)
@@ -1509,6 +1527,20 @@ func _draw_stick(u: Dictionary) -> void:
 	draw_circle(head, 7.4 * sc, team)
 	draw_circle(head + Vector2(-facing * 0.4, -0.6 * sc), 5.8 * sc, skin)
 	draw_circle(head + Vector2(facing * 2.3 * sc, 0.2 * sc), 1.05 * sc, ink)
+	if kind == "MINER":
+		draw_arc(head + Vector2(0, -2.0 * sc), 7.0 * sc, PI, TAU, 12, Color("#c4ccd4"), 2.0 * sc, true)
+		draw_circle(head + Vector2(0, -5.0 * sc), 1.7 * sc, GOLD)
+	elif kind == "SWORD":
+		draw_colored_polygon(PackedVector2Array([head + Vector2(-6, -3) * sc, head + Vector2(0, -10) * sc, head + Vector2(6, -3) * sc, head + Vector2(4, 0) * sc, head + Vector2(-4, 0) * sc]), Color("#b9c6d4"))
+	elif kind == "ARCHER":
+		draw_colored_polygon(PackedVector2Array([head + Vector2(-7, -1) * sc, head + Vector2(-4, -7) * sc, head + Vector2(5, -8) * sc, head + Vector2(7, -1) * sc]), Color("#7c5a42"))
+	elif kind == "SPEAR":
+		draw_colored_polygon(PackedVector2Array([head + Vector2(-7, -2) * sc, head + Vector2(-2, -9) * sc, head + Vector2(4, -8) * sc, head + Vector2(7, -2) * sc]), Color("#aab6c4"))
+	elif kind == "MAGE":
+		draw_colored_polygon(PackedVector2Array([head + Vector2(-8, -1) * sc, head + Vector2(-5, -7) * sc, head + Vector2(0, -15) * sc, head + Vector2(5, -7) * sc, head + Vector2(8, -1) * sc]), Color("#5d4778"))
+		draw_circle(head + Vector2(0, -10) * sc, 1.7 * sc, Color("#9ec2ff"))
+	elif kind == "GIANT":
+		draw_arc(head + Vector2(0, -2.0 * sc), 8.3 * sc, PI, TAU, 12, Color("#8d8378"), 2.7 * sc, true)
 	if kind == "MINER" and float(u.get("bag", 0.0)) > 6.0:
 		var br := 3.2 + float(u["bag"]) / BAG_MAX * 5.5
 		var bag_at := Vector2(x - facing * 8.0 * sc, hip.y - 2.0)
@@ -1562,7 +1594,7 @@ func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, anim_ph
 		draw_line(tip + Vector2(-dir * 2.0 * sc, -2.0 * sc), tip + Vector2(dir * 4.0 * sc, 1.0 * sc), GOLD, 2.2 * sc, true)
 
 func _stage_name_fa(index: int) -> String:
-	var names := ["راه غبارآلود", "درهٔ کمان", "صف سپرها", "محفل خاکستر", "راه سنگی", "دو پرچم", "سپاه شب", "تاج چوبین"]
+	var names := ["راه غبارآلود", "درهٔ کمان", "صف نیزه‌ها", "محفل خاکستر", "راه سنگی", "دو پرچم", "سپاه شب", "تاج چوبین", "گذرگاه آهنین", "خزانهٔ طوفان", "ارگ فروپاشیده", "آخرین مشعل"]
 	return names[clampi(index, 0, names.size() - 1)]
 
 func _stage_blurb_fa(index: int) -> String:
@@ -1574,7 +1606,11 @@ func _stage_blurb_fa(index: int) -> String:
 		"نیروهای سنگین وارد میدان می‌شوند.",
 		"دو گروه بزرگ برای پیروزی رقابت می‌کنند.",
 		"نبردی در آسمان تاریک پیش روست.",
-		"آخرین مرحلهٔ این مسیر را کامل کن."
+		"آخرین مرحلهٔ مسیر نخست را کامل کن.",
+		"از خط دفاعی مستحکم عبور کن.",
+		"آتش دوربرد و نیروهای سنگین میدان را پر کرده‌اند.",
+		"آخرین صف ارگ را درهم بشکن.",
+		"در آخرین پیشروی از قلعه محافظت کن و قاطعانه حمله کن."
 	]
 	return blurbs[clampi(index, 0, blurbs.size() - 1)]
 
@@ -1723,29 +1759,29 @@ func _draw_menu() -> void:
 	var total := 0
 	for s in stars:
 		total += int(s)
-	_text("پیروزی‌ها  " + str(wins) + "    ستاره‌ها  " + str(total) + "/24", Vector2(80, 590), 14, MUTED)
-	_text("VERSION 0.4.0", Vector2(80, 680), 12, Color("#66707c"))
+	_text("پیروزی‌ها  " + str(wins) + "    ستاره‌ها  " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 590), 14, MUTED)
+	_text("VERSION 0.5.0", Vector2(80, 680), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
 	draw_rect(Rect2(0, 0, W, H), Color(0.04, 0.05, 0.08, 0.35))
 	_button(Rect2(40, 28, 140, 44), "بازگشت", MUTED, true)
 	_text("مراحل داستانی", Vector2(210, 58), 26, GOLD)
-	_text("با پیروزی، مراحل و نیروهای تازه باز می‌شوند.", Vector2(420, 58), 16, MUTED)
-	for i in 8:
+	_text("۱۲ نبرد؛ با پیروزی، مسیر پیشروی و ستاره‌ها را باز کن.", Vector2(480, 58), 16, MUTED)
+	for i in STAGES.size():
 		var rect := _stage_rect(i)
 		var open := i < unlocked
 		var stg: Dictionary = STAGES[i]
 		draw_rect(rect, Color(0.07, 0.09, 0.12, 0.92))
 		draw_rect(rect, GOLD if open else Color("#3c4450"), false, 2.0)
-		_text(str(i + 1).pad_zeros(2), rect.position + Vector2(16, 36), 18, GOLD if open else MUTED)
-		_text(_stage_name_fa(i), rect.position + Vector2(16, 78), 17, BONE if open else MUTED)
-		_text(_stage_blurb_fa(i), rect.position + Vector2(16, 112), 12, MUTED)
+		_text(str(i + 1).pad_zeros(2), rect.position + Vector2(16, 30), 17, GOLD if open else MUTED)
+		_text(_stage_name_fa(i), rect.position + Vector2(16, 62), 16, BONE if open else MUTED)
+		_text(_stage_blurb_fa(i), rect.position + Vector2(16, 94), 11, MUTED)
 		if open:
 			for k in 3:
-				_gem(rect.position + Vector2(28 + k * 26, 168), int(stars[i]) > k)
+				_gem(rect.position + Vector2(28 + k * 26, 138), int(stars[i]) > k)
 		else:
-			_text("قفل است", rect.position + Vector2(16, 172), 14, Color("#6a7380"))
+			_text("قفل است", rect.position + Vector2(16, 140), 13, Color("#6a7380"))
 
 func _draw_help() -> void:
 	draw_rect(Rect2(0, 0, W, H), Color("#121820"))
@@ -1777,7 +1813,7 @@ func _draw_result() -> void:
 		_text("مرحلهٔ بعدی باز شد.", Vector2(500, 380), 16, BONE)
 	else:
 		_text("نیروها و منابع را بهتر مدیریت کن و دوباره تلاش کن.", Vector2(420, 320), 16, BONE)
-	_button(Rect2(430, 470, 420, 56), "مرحلهٔ بعد" if won and stage_i + 1 < 8 else ("نقشهٔ مراحل" if won else "تلاش دوباره"), GOLD, true)
+	_button(Rect2(430, 470, 420, 56), "مرحلهٔ بعد" if won and stage_i + 1 < STAGES.size() else ("نقشهٔ مراحل" if won else "تلاش دوباره"), GOLD, true)
 	_button(Rect2(430, 538, 200, 48), "تکرار", BLUE, true)
 	_button(Rect2(650, 538, 200, 48), "نقشه", MUTED, true)
 
