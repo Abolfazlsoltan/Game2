@@ -217,7 +217,7 @@ func _validate_save_service() -> bool:
 	var expected_stars: Array = []
 	for i in STAGES.size():
 		expected_stars.append(int(sample["stars"][i]) if i < sample["stars"].size() else 0)
-	var valid := (
+	var valid: bool = (
 		int(loaded.get("unlocked", 0)) == int(sample["unlocked"])
 		and int(loaded.get("wins", -1)) == int(sample["wins"])
 		and bool(loaded.get("sfx_on", true)) == bool(sample["sfx_on"])
