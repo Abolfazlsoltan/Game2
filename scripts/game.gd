@@ -37,6 +37,7 @@ var unlocked := 1
 var stars: Array = []
 var wins := 0
 var game_mode := "campaign"
+var difficulty := 0
 var survival_wave := 1
 var best_wave := 0
 var tournament_round := 1
@@ -127,11 +128,17 @@ func _ready() -> void:
 		var tournament_start_ok := game_mode == "tournament" and tournament_round == 1 and screen == "battle"
 		_advance_tournament_round()
 		var tournament_round_ok := tournament_round == 2 and enemy_hp > 0.0
-		if survival_start_ok and survival_wave_ok and tournament_start_ok and tournament_round_ok:
-			print("MODE_VALIDATION_OK: survival waves and tournament rounds initialized.")
+		difficulty = 0
+		var normal_ok := is_equal_approx(_difficulty_health_multiplier(), 1.0) and is_equal_approx(_difficulty_damage_multiplier(), 1.0)
+		difficulty = 1
+		var hard_ok := is_equal_approx(_difficulty_health_multiplier(), 1.25) and is_equal_approx(_difficulty_damage_multiplier(), 1.15)
+		difficulty = 2
+		var extreme_ok := is_equal_approx(_difficulty_health_multiplier(), 1.6) and is_equal_approx(_difficulty_damage_multiplier(), 1.35)
+		if survival_start_ok and survival_wave_ok and tournament_start_ok and tournament_round_ok and normal_ok and hard_ok and extreme_ok:
+			print("MODE_VALIDATION_OK: survival, tournament and difficulty rules initialized.")
 			get_tree().quit(0)
 		else:
-			push_error("MODE_VALIDATION_FAIL: survival or tournament state did not advance correctly.")
+			push_error("MODE_VALIDATION_FAIL: mode transitions or difficulty rules did not validate.")
 			get_tree().quit(1)
 		return
 	if OS.get_cmdline_user_args().has("--smoke"):
@@ -217,6 +224,7 @@ func _load_save() -> void:
 	wins = int(progress.get("wins", 0))
 	sfx_on = bool(progress.get("sfx_on", true))
 	stars = progress.get("stars", [])
+	difficulty = clampi(int(progress.get("difficulty", 0)), 0, 2)
 	best_wave = int(progress.get("best_wave", 0))
 	tournament_wins = int(progress.get("tournament_wins", 0))
 
@@ -226,6 +234,7 @@ func _save_game() -> void:
 		"wins": wins,
 		"sfx_on": sfx_on,
 		"stars": stars,
+		"difficulty": difficulty,
 		"best_wave": best_wave,
 		"tournament_wins": tournament_wins,
 	}
@@ -242,6 +251,7 @@ func _validate_save_service() -> bool:
 		"stars": [3, 2, 1, 0, 3, 2, 1, 0],
 		"best_wave": 9,
 		"tournament_wins": 2,
+		"difficulty": 2,
 	}
 	var write_error: Error = SaveService.save_progress(sample, test_path, STAGES.size())
 	if write_error != OK:
@@ -257,6 +267,7 @@ func _validate_save_service() -> bool:
 		and bool(loaded.get("sfx_on", true)) == bool(sample["sfx_on"])
 		and int(loaded.get("best_wave", 0)) == int(sample["best_wave"])
 		and int(loaded.get("tournament_wins", 0)) == int(sample["tournament_wins"])
+		and int(loaded.get("difficulty", 0)) == int(sample["difficulty"])
 		and loaded.get("stars", []) == expected_stars
 	)
 	var remove_error: Error = DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
@@ -279,6 +290,30 @@ func _pop_limit() -> int:
 		return mini(40, base + tournament_round * 2)
 	return base
 
+func _difficulty_health_multiplier() -> float:
+	match difficulty:
+		1: return 1.25
+		2: return 1.60
+		_: return 1.0
+
+func _difficulty_damage_multiplier() -> float:
+	match difficulty:
+		1: return 1.15
+		2: return 1.35
+		_: return 1.0
+
+func _difficulty_gold_multiplier() -> float:
+	match difficulty:
+		1: return 1.15
+		2: return 1.30
+		_: return 1.0
+
+func _difficulty_label() -> String:
+	match difficulty:
+		1: return "سخت"
+		2: return "بی‌رحم"
+		_: return "عادی"
+
 func _begin(index: int) -> void:
 	stage_i = clampi(index, 0, STAGES.size() - 1)
 	var stg := _stage()
@@ -288,10 +323,10 @@ func _begin(index: int) -> void:
 	ending_t = 0.0
 	intro_t = 1.65
 	gold = int(stg["p_gold"])
-	enemy_gold = int(stg["e_gold"])
+	enemy_gold = int(float(stg["e_gold"]) * (_difficulty_gold_multiplier() if game_mode == "campaign" else 1.0))
 	player_hp = float(stg["p_hp"])
 	player_max = player_hp
-	enemy_hp = float(stg["e_hp"])
+	enemy_hp = float(stg["e_hp"]) * (_difficulty_health_multiplier() if game_mode == "campaign" else 1.0)
 	enemy_max = enemy_hp
 	p_order = "defend"
 	e_order = "defend"
@@ -701,7 +736,7 @@ func _combat_ai(u: Dictionary, dt: float) -> void:
 		aggro = maxf(aggro, reach)
 	var foe := _nearest_foe(u, aggro)
 	var pos := Vector2(float(u["x"]), float(u["y"]))
-	if foe >= 0 and order != "defend":
+	if foe >= 0 and order == "attack":
 		var f: Dictionary = units[foe]
 		var fp := Vector2(float(f["x"]), float(f["y"]))
 		var dist := pos.distance_to(fp)
@@ -806,6 +841,8 @@ func _dmg(u: Dictionary) -> float:
 	var amount := float(STATS[str(u["kind"])]["dmg"])
 	if int(u["side"]) == 0 and int(u["id"]) == selected_id:
 		amount *= 2.0
+	elif int(u["side"]) == 1 and game_mode == "campaign":
+		amount *= _difficulty_damage_multiplier()
 	return amount
 
 func _shoot(u: Dictionary, tx: float, ty: float, dmg: float, at_statue: bool) -> void:
@@ -1281,6 +1318,10 @@ func _click(id: String) -> void:
 	elif id == "back_menu":
 		game_mode = "campaign"
 		screen = "menu"
+	elif id.begins_with("difficulty_"):
+		difficulty = clampi(int(id.trim_prefix("difficulty_")), 0, 2)
+		_save_game()
+		_toast("سختی: " + _difficulty_label())
 	elif id.begins_with("stage_"):
 		var index := int(id.trim_prefix("stage_"))
 		if index < unlocked:
@@ -1373,6 +1414,12 @@ func _hit_button(p: Vector2) -> String:
 	elif screen == "map":
 		if Rect2(40, 28, 140, 44).has_point(p):
 			return "back_menu"
+		if Rect2(500, 80, 130, 32).has_point(p):
+			return "difficulty_0"
+		if Rect2(640, 80, 130, 32).has_point(p):
+			return "difficulty_1"
+		if Rect2(780, 80, 130, 32).has_point(p):
+			return "difficulty_2"
 		for i in STAGES.size():
 			if _stage_rect(i).has_point(p):
 				return "stage_" + str(i)
@@ -1418,7 +1465,7 @@ func _train_rect(i: int) -> Rect2:
 func _stage_rect(i: int) -> Rect2:
 	var col := i % 4
 	var row := int(i / 4.0)
-	return Rect2(70.0 + float(col) * 300.0, 108.0 + float(row) * 184.0, 276.0, 162.0)
+	return Rect2(70.0 + float(col) * 300.0, 128.0 + float(row) * 184.0, 276.0, 162.0)
 
 func _draw() -> void:
 	var viewport_size := get_viewport_rect().size
@@ -1935,7 +1982,7 @@ func _draw_menu() -> void:
 		total += int(s)
 	_text("پیروزی‌ها " + str(wins) + "  ·  ستاره‌ها " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 614), 13, MUTED)
 	_text("رکورد بقا: موج " + str(best_wave) + "  ·  قهرمانی‌ها: " + str(tournament_wins), Vector2(80, 640), 12, GOLD)
-	_text("VERSION 0.6.0", Vector2(80, 684), 12, Color("#66707c"))
+	_text("VERSION 0.7.0", Vector2(80, 684), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
@@ -1943,6 +1990,10 @@ func _draw_map() -> void:
 	_button(Rect2(40, 28, 140, 44), "بازگشت", MUTED, true)
 	_text("مراحل داستانی", Vector2(210, 58), 26, GOLD)
 	_text("۱۲ نبرد؛ با پیروزی، مسیر پیشروی و ستاره‌ها را باز کن.", Vector2(480, 58), 16, MUTED)
+	_text("سختی:", Vector2(438, 105), 13, MUTED)
+	_button(Rect2(500, 80, 130, 32), "عادی", GOLD, true, difficulty == 0)
+	_button(Rect2(640, 80, 130, 32), "سخت", Color("#e5a458"), true, difficulty == 1)
+	_button(Rect2(780, 80, 130, 32), "بی‌رحم", RED, true, difficulty == 2)
 	for i in STAGES.size():
 		var rect := _stage_rect(i)
 		var open := i < unlocked

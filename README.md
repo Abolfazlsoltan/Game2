@@ -11,6 +11,7 @@ A landscape stick-legion strategy game for Android, built with Godot 4.5. The ca
 - Tap a soldier to take direct control. They stop following the army order, a star marks them, and their hits land twice as hard. The stick moves them. The round button is their skill.
 - Destroy the enemy statue. If yours falls, the battle is lost.
 - Twelve campaign battles with progressive unit unlocks and star records.
+- Three campaign difficulty levels; higher difficulty increases enemy statue health, damage, and starting gold. Your choice is saved.
 - Endless Survival: enemy waves grow stronger; best wave is saved locally.
 - Five-round Tournament with escalating enemy rosters and a saved win record.
 

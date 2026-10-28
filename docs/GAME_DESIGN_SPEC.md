@@ -13,7 +13,7 @@ That listing describes army formations and direct unit control, mining gold, swo
 
 The repository currently provides:
 - an original 2D landscape battlefield and statue objective;
-- a twelve-battle campaign with increasing population caps, enemy rosters, and monument health;
+- a twelve-battle campaign with increasing population caps, enemy rosters, monument health, and three selectable difficulties;
 - Endless Survival with scaling waves and a five-round Tournament;
 - miner gold economy and six archetypes: Miner, Sword, Archer, Spear, Mage, Giant;
 - training queues, population cap, enemy AI and projectiles;

@@ -13,6 +13,7 @@ static func default_progress(stage_count: int = DEFAULT_STAGE_COUNT) -> Dictiona
 		"wins": 0,
 		"sfx_on": true,
 		"stars": stars,
+		"difficulty": 0,
 		"best_wave": 0,
 		"tournament_wins": 0,
 	}
@@ -26,6 +27,7 @@ static func load_progress(path: String = DEFAULT_SAVE_PATH, stage_count: int = D
 	progress["unlocked"] = clampi(int(config.get_value("campaign", "unlocked", 1)), 1, maxi(1, stage_count))
 	progress["wins"] = maxi(0, int(config.get_value("campaign", "wins", 0)))
 	progress["sfx_on"] = bool(config.get_value("campaign", "sfx", true))
+	progress["difficulty"] = clampi(int(config.get_value("campaign", "difficulty", 0)), 0, 2)
 	progress["best_wave"] = maxi(0, int(config.get_value("records", "best_wave", 0)))
 	progress["tournament_wins"] = maxi(0, int(config.get_value("records", "tournament_wins", 0)))
 
@@ -43,6 +45,7 @@ static func save_progress(progress: Dictionary, path: String = DEFAULT_SAVE_PATH
 	config.set_value("campaign", "unlocked", clampi(int(progress.get("unlocked", 1)), 1, maxi(1, stage_count)))
 	config.set_value("campaign", "wins", maxi(0, int(progress.get("wins", 0))))
 	config.set_value("campaign", "sfx", bool(progress.get("sfx_on", true)))
+	config.set_value("campaign", "difficulty", clampi(int(progress.get("difficulty", 0)), 0, 2))
 	config.set_value("records", "best_wave", maxi(0, int(progress.get("best_wave", 0))))
 	config.set_value("records", "tournament_wins", maxi(0, int(progress.get("tournament_wins", 0))))
 
