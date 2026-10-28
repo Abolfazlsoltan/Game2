@@ -11,6 +11,8 @@ A landscape stick-legion strategy game for Android, built with Godot 4.5. The ca
 - Tap a soldier to take direct control. They stop following the army order, a star marks them, and their hits land twice as hard. The stick moves them. The round button is their skill.
 - Destroy the enemy statue. If yours falls, the battle is lost.
 - Twelve campaign battles with progressive unit unlocks and star records.
+- Endless Survival: enemy waves grow stronger; best wave is saved locally.
+- Five-round Tournament with escalating enemy rosters and a saved win record.
 
 ## Download the APK
 Each push to `main` runs **Build Android APK**.
@@ -20,7 +22,7 @@ Each push to `main` runs **Build Android APK**.
 3. Download the artifact `SmallWarriors-Android-APK`.
 4. Unzip it and install `SmallWarriors.apk` on an Android phone.
 
-The APK is a debug build for testing. Landscape only. Progress is stored at `user://small_warriors.cfg`.
+The APK is a debug build for testing. Landscape only. Campaign progress, survival records, tournament wins, and sound preferences are stored at `user://small_warriors.cfg`.
 
 ## Desktop keys
 `WASD` move the selected soldier. `J` or `Space` uses their skill. `1-6` train. `F` attack, `G` defend, `H` garrison. `Esc` pauses.

@@ -63,6 +63,12 @@ jobs:
           set -euxo pipefail
           godot --headless --path . -- --validate-save
 
+      - name: Validate survival and tournament modes
+        shell: bash
+        run: |
+          set -euxo pipefail
+          godot --headless --path . -- --validate-modes
+
       - name: Run battle simulation smoke test
         shell: bash
         run: |

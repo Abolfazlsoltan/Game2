@@ -36,6 +36,11 @@ var sfx_on := true
 var unlocked := 1
 var stars: Array = []
 var wins := 0
+var game_mode := "campaign"
+var survival_wave := 1
+var best_wave := 0
+var tournament_round := 1
+var tournament_wins := 0
 var stage_i := 0
 var gold := 0
 var enemy_gold := 0
@@ -113,6 +118,22 @@ func _ready() -> void:
 	music.stream = _drone()
 	if sfx_on:
 		music.play()
+	if OS.get_cmdline_user_args().has("--validate-modes"):
+		_start_survival()
+		var survival_start_ok := game_mode == "survival" and screen == "battle" and survival_wave == 1 and _unlocked("GIANT")
+		_advance_survival_wave()
+		var survival_wave_ok := survival_wave == 2 and enemy_hp > 0.0 and _pop_limit() > int(_stage()["cap"])
+		_start_tournament()
+		var tournament_start_ok := game_mode == "tournament" and tournament_round == 1 and screen == "battle"
+		_advance_tournament_round()
+		var tournament_round_ok := tournament_round == 2 and enemy_hp > 0.0
+		if survival_start_ok and survival_wave_ok and tournament_start_ok and tournament_round_ok:
+			print("MODE_VALIDATION_OK: survival waves and tournament rounds initialized.")
+			get_tree().quit(0)
+		else:
+			push_error("MODE_VALIDATION_FAIL: survival or tournament state did not advance correctly.")
+			get_tree().quit(1)
+		return
 	if OS.get_cmdline_user_args().has("--smoke"):
 		_begin(0)
 		intro_t = 0.0
@@ -174,13 +195,17 @@ func _notification(what: int) -> void:
 func _back() -> void:
 	if screen == "battle":
 		if ending != "":
-			screen = "map"
+			screen = "menu" if game_mode != "campaign" else "map"
+			if screen == "menu":
+				game_mode = "campaign"
 		else:
 			paused = not paused
 	elif screen == "help" or screen == "map" or screen == "result":
-		screen = "menu" if screen != "result" else "map"
-		if screen == "menu":
-			pass
+		if screen == "result" and game_mode == "campaign":
+			screen = "map"
+		else:
+			screen = "menu"
+			game_mode = "campaign"
 		_save_game()
 	else:
 		_save_game()
@@ -192,6 +217,8 @@ func _load_save() -> void:
 	wins = int(progress.get("wins", 0))
 	sfx_on = bool(progress.get("sfx_on", true))
 	stars = progress.get("stars", [])
+	best_wave = int(progress.get("best_wave", 0))
+	tournament_wins = int(progress.get("tournament_wins", 0))
 
 func _save_game() -> void:
 	var progress := {
@@ -199,6 +226,8 @@ func _save_game() -> void:
 		"wins": wins,
 		"sfx_on": sfx_on,
 		"stars": stars,
+		"best_wave": best_wave,
+		"tournament_wins": tournament_wins,
 	}
 	var save_error: Error = SaveService.save_progress(progress, SAVE_PATH, STAGES.size())
 	if save_error != OK:
@@ -211,6 +240,8 @@ func _validate_save_service() -> bool:
 		"wins": 7,
 		"sfx_on": false,
 		"stars": [3, 2, 1, 0, 3, 2, 1, 0],
+		"best_wave": 9,
+		"tournament_wins": 2,
 	}
 	var write_error: Error = SaveService.save_progress(sample, test_path, STAGES.size())
 	if write_error != OK:
@@ -224,6 +255,8 @@ func _validate_save_service() -> bool:
 		int(loaded.get("unlocked", 0)) == int(sample["unlocked"])
 		and int(loaded.get("wins", -1)) == int(sample["wins"])
 		and bool(loaded.get("sfx_on", true)) == bool(sample["sfx_on"])
+		and int(loaded.get("best_wave", 0)) == int(sample["best_wave"])
+		and int(loaded.get("tournament_wins", 0)) == int(sample["tournament_wins"])
 		and loaded.get("stars", []) == expected_stars
 	)
 	var remove_error: Error = DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
@@ -237,6 +270,14 @@ func _validate_save_service() -> bool:
 
 func _stage() -> Dictionary:
 	return STAGES[stage_i]
+
+func _pop_limit() -> int:
+	var base := int(_stage()["cap"])
+	if game_mode == "survival":
+		return mini(48, base + maxi(0, survival_wave - 1) * 2)
+	if game_mode == "tournament":
+		return mini(40, base + tournament_round * 2)
+	return base
 
 func _begin(index: int) -> void:
 	stage_i = clampi(index, 0, STAGES.size() - 1)
@@ -287,21 +328,104 @@ func _begin(index: int) -> void:
 func _finish() -> void:
 	var won := ending == "win"
 	result_stars = 0
-	if won:
-		var ratio := player_hp / maxf(1.0, player_max)
-		result_stars = 1
-		if ratio >= 0.42:
-			result_stars = 2
-		if ratio >= 0.7:
-			result_stars = 3
-		if int(stars[stage_i]) < result_stars:
-			stars[stage_i] = result_stars
-		if stage_i + 1 >= unlocked and unlocked < STAGES.size():
-			unlocked = stage_i + 2
-		wins += 1
+	if game_mode == "campaign":
+		if won:
+			var ratio := player_hp / maxf(1.0, player_max)
+			result_stars = 1
+			if ratio >= 0.42:
+				result_stars = 2
+			if ratio >= 0.7:
+				result_stars = 3
+			if int(stars[stage_i]) < result_stars:
+				stars[stage_i] = result_stars
+			if stage_i + 1 >= unlocked and unlocked < STAGES.size():
+				unlocked = stage_i + 2
+			wins += 1
+	elif game_mode == "survival":
+		best_wave = maxi(best_wave, survival_wave)
+	elif game_mode == "tournament" and won:
+		tournament_wins += 1
 	screen = "result"
 	ending = "" if won else "lose"
 	_save_game()
+
+func _start_survival() -> void:
+	game_mode = "survival"
+	survival_wave = 1
+	_begin(0)
+	gold = 800
+	enemy_gold = 420
+	player_max = 2400.0
+	player_hp = player_max
+	enemy_max = 1000.0
+	enemy_hp = enemy_max
+	_spawn(0, "SWORD")
+	_spawn(0, "ARCHER")
+	_spawn(1, "SWORD")
+	_toast("حالت بقا — موج ۱")
+
+func _start_tournament() -> void:
+	game_mode = "tournament"
+	tournament_round = 1
+	_begin(2)
+	gold = 760
+	enemy_gold = 700
+	_toast("مسابقات — دور ۱ از ۵")
+
+func _advance_survival_wave() -> void:
+	survival_wave += 1
+	stage_i = mini(survival_wave - 1, STAGES.size() - 1)
+	_reset_opponent_for_round()
+
+func _advance_tournament_round() -> void:
+	tournament_round += 1
+	stage_i = mini(tournament_round + 1, STAGES.size() - 1)
+	_reset_opponent_for_round()
+
+func _reset_opponent_for_round() -> void:
+	for i in range(units.size() - 1, -1, -1):
+		if int(units[i]["side"]) == 1:
+			units.remove_at(i)
+	for i in range(projectiles.size() - 1, -1, -1):
+		if int(projectiles[i]["side"]) == 1:
+			projectiles.remove_at(i)
+	enemy_queue.clear()
+	enemy_train_t = 0.0
+	e_order = "defend"
+	if game_mode == "survival":
+		enemy_max = 850.0 + float(survival_wave) * 330.0
+		enemy_gold = 220 + survival_wave * 150
+		gold += mini(250, 70 + survival_wave * 12)
+		player_hp = minf(player_max, player_hp + player_max * 0.12)
+	else:
+		enemy_max = float(_stage()["e_hp"]) * (1.0 + float(tournament_round - 1) * 0.10)
+		enemy_gold = int(_stage()["e_gold"]) + tournament_round * 90
+		gold += 100
+		player_hp = minf(player_max, player_hp + player_max * 0.16)
+	enemy_hp = enemy_max
+	_spawn(1, "MINER")
+	_spawn(1, "SWORD")
+	if game_mode == "survival":
+		if survival_wave >= 3:
+			_spawn(1, "ARCHER")
+		if survival_wave >= 5:
+			_spawn(1, "SPEAR")
+		if survival_wave >= 7:
+			_spawn(1, "MAGE")
+		if survival_wave >= 9:
+			_spawn(1, "GIANT")
+		_toast("موج " + str(survival_wave) + " — دشمن قوی‌تر شده است")
+	else:
+		if tournament_round >= 2:
+			_spawn(1, "ARCHER")
+		if tournament_round >= 3:
+			_spawn(1, "SPEAR")
+		if tournament_round >= 4:
+			_spawn(1, "MAGE")
+		if tournament_round >= 5:
+			_spawn(1, "GIANT")
+		_toast("مسابقات — دور " + str(tournament_round) + " از ۵")
+	ai_timer = 0.0
 
 func _spawn(side: int, kind: String) -> int:
 	var st: Dictionary = STATS[kind]
@@ -323,6 +447,8 @@ func _spawn(side: int, kind: String) -> int:
 	return id
 
 func _unlocked(kind: String) -> bool:
+	if game_mode != "campaign":
+		return true
 	return kind in _stage()["unlock"]
 
 func _enqueue(side: int, kind: String) -> bool:
@@ -338,7 +464,7 @@ func _enqueue(side: int, kind: String) -> bool:
 			_toast("Not enough gold")
 			_sfx("ui")
 		return false
-	if _pop(side) + int(st["pop"]) > int(_stage()["cap"]):
+	if _pop(side) + int(st["pop"]) > _pop_limit():
 		if side == 0:
 			_toast("Population is full")
 		return false
@@ -410,10 +536,15 @@ func _step(dt: float) -> void:
 			_sfx("lose")
 		elif enemy_hp <= 0.0:
 			enemy_hp = 0.0
-			ending = "win"
-			ending_t = 0.95
-			shake = 7.0
-			_sfx("win")
+			if game_mode == "survival":
+				_advance_survival_wave()
+			elif game_mode == "tournament" and tournament_round < 5:
+				_advance_tournament_round()
+			else:
+				ending = "win"
+				ending_t = 0.95
+				shake = 7.0
+				_sfx("win")
 
 func _tick_queues(dt: float) -> void:
 	if not player_queue.is_empty():
@@ -1131,7 +1262,12 @@ func _set_order(order: String) -> void:
 func _click(id: String) -> void:
 	_sfx("ui")
 	if id == "campaign":
+		game_mode = "campaign"
 		screen = "map"
+	elif id == "survival":
+		_start_survival()
+	elif id == "tournament":
+		_start_tournament()
 	elif id == "help":
 		screen = "help"
 	elif id == "sfx":
@@ -1143,10 +1279,12 @@ func _click(id: String) -> void:
 			music.stop()
 		_save_game()
 	elif id == "back_menu":
+		game_mode = "campaign"
 		screen = "menu"
 	elif id.begins_with("stage_"):
 		var index := int(id.trim_prefix("stage_"))
 		if index < unlocked:
+			game_mode = "campaign"
 			_begin(index)
 		else:
 			_toast("Win the previous battle first")
@@ -1155,10 +1293,14 @@ func _click(id: String) -> void:
 	elif id == "resume":
 		paused = false
 	elif id == "retry":
-		_begin(stage_i)
+		_restart_current_mode()
 	elif id == "to_map":
 		paused = false
-		screen = "map"
+		if game_mode == "campaign":
+			screen = "map"
+		else:
+			screen = "menu"
+			game_mode = "campaign"
 		_save_game()
 	elif id == "order_attack":
 		_set_order("attack")
@@ -1169,14 +1311,31 @@ func _click(id: String) -> void:
 	elif id.begins_with("train_"):
 		_enqueue(0, id.trim_prefix("train_"))
 	elif id == "next":
-		if stage_i + 1 < unlocked:
+		if game_mode == "campaign" and stage_i + 1 < unlocked:
 			_begin(stage_i + 1)
 		else:
-			screen = "map"
+			screen = "map" if game_mode == "campaign" else "menu"
+			if screen == "menu":
+				game_mode = "campaign"
 	elif id == "result_retry":
-		_begin(stage_i)
+		_restart_current_mode()
 	elif id == "result_map":
-		screen = "map"
+		if game_mode == "campaign":
+			screen = "map"
+		else:
+			screen = "menu"
+			game_mode = "campaign"
+	elif id == "result_menu":
+		screen = "menu"
+		game_mode = "campaign"
+
+func _restart_current_mode() -> void:
+	if game_mode == "survival":
+		_start_survival()
+	elif game_mode == "tournament":
+		_start_tournament()
+	else:
+		_begin(stage_i)
 
 func _field_tap(p: Vector2) -> void:
 	if screen != "battle" or paused or ending != "" or intro_t > 0.0:
@@ -1198,11 +1357,15 @@ func _field_tap(p: Vector2) -> void:
 
 func _hit_button(p: Vector2) -> String:
 	if screen == "menu":
-		if Rect2(78, 360, 280, 64).has_point(p):
+		if Rect2(78, 308, 280, 48).has_point(p):
 			return "campaign"
-		if Rect2(78, 440, 280, 54).has_point(p):
+		if Rect2(78, 366, 280, 48).has_point(p):
+			return "survival"
+		if Rect2(78, 424, 280, 48).has_point(p):
+			return "tournament"
+		if Rect2(78, 482, 280, 42).has_point(p):
 			return "help"
-		if Rect2(78, 508, 280, 48).has_point(p):
+		if Rect2(78, 534, 280, 40).has_point(p):
 			return "sfx"
 	elif screen == "help":
 		if Rect2(78, 640, 240, 52).has_point(p):
@@ -1215,11 +1378,15 @@ func _hit_button(p: Vector2) -> String:
 				return "stage_" + str(i)
 	elif screen == "result":
 		if Rect2(430, 470, 420, 56).has_point(p):
-			return "next" if ending == "" else "result_retry"
+			if ending != "":
+				return "result_retry"
+			if game_mode == "campaign" and stage_i + 1 < STAGES.size():
+				return "next"
+			return "result_menu" if game_mode != "campaign" else "result_map"
 		if Rect2(430, 538, 200, 48).has_point(p):
 			return "result_retry"
 		if Rect2(650, 538, 200, 48).has_point(p):
-			return "result_map"
+			return "result_map" if game_mode == "campaign" else "result_menu"
 	elif screen == "battle":
 		if paused:
 			if Rect2(470, 300, 340, 52).has_point(p):
@@ -1625,10 +1792,15 @@ func _unit_name_fa(kind: String) -> String:
 		_: return kind
 
 func _draw_battle_ui() -> void:
+	var mode_label := _stage_name_fa(stage_i)
+	if game_mode == "survival":
+		mode_label = "بقا  ·  موج " + str(survival_wave)
+	elif game_mode == "tournament":
+		mode_label = "مسابقات  ·  دور " + str(tournament_round) + "/5"
 	_text("جنگاوران کوچک", Vector2(124, 36), 17, GOLD)
-	_text(_stage_name_fa(stage_i), Vector2(124, 56), 13, MUTED)
+	_text(mode_label, Vector2(124, 56), 13, MUTED)
 	_pill(Rect2(430, 16, 200, 40), str(gold) + " طلا", GOLD)
-	_pill(Rect2(646, 16, 150, 40), "جمعیت " + str(_pop(0)) + "/" + str(int(_stage()["cap"])), BONE)
+	_pill(Rect2(646, 16, 150, 40), "جمعیت " + str(_pop(0)) + "/" + str(_pop_limit()), BONE)
 	_button(Rect2(24, 16, 86, 42), "II", MUTED, true)
 	_bar(Rect2(24, 78, 250, 10), player_hp / maxf(1.0, player_max), BLUE)
 	_text("قلعهٔ شما  " + str(int(player_hp)), Vector2(24, 104), 12, MUTED)
@@ -1664,7 +1836,7 @@ func _draw_battle_ui() -> void:
 		_text("بازی متوقف شد", Vector2(520, 250), 30, BONE)
 		_button(Rect2(470, 300, 340, 52), "ادامهٔ بازی", GOLD, true)
 		_button(Rect2(470, 364, 340, 52), "شروع دوباره", BLUE, true)
-		_button(Rect2(470, 428, 340, 52), "نقشهٔ مراحل", MUTED, true)
+		_button(Rect2(470, 428, 340, 52), "منوی بازی" if game_mode != "campaign" else "نقشهٔ مراحل", MUTED, true)
 	if screen == "result":
 		_draw_result()
 
@@ -1673,7 +1845,7 @@ func _draw_train(i: int) -> void:
 	var st: Dictionary = STATS[kind]
 	var rect := _train_rect(i)
 	var on := _unlocked(kind)
-	var afford := gold >= int(st["cost"]) and _pop(0) + int(st["pop"]) <= int(_stage()["cap"])
+	var afford := gold >= int(st["cost"]) and _pop(0) + int(st["pop"]) <= _pop_limit()
 	var accent := GOLD if on and afford else Color("#5c6570")
 	_button(rect, "", accent, on)
 	_text(_unit_name_fa(kind), rect.position + Vector2(12, 24), 15, BONE if on else MUTED)
@@ -1753,14 +1925,17 @@ func _draw_menu() -> void:
 	_text("جنگاوران کوچک", Vector2(78, 120), 18, GOLD)
 	_text("لشکر کوچک", Vector2(76, 188), 50, BONE)
 	_text("منابع جمع کن، نیروها را مدیریت کن و مراحل را پیش ببر.", Vector2(80, 230), 16, MUTED)
-	_button(Rect2(78, 360, 280, 64), "مراحل داستانی", GOLD, true)
-	_button(Rect2(78, 440, 280, 54), "راهنمای بازی", Color("#8d97a5"), true)
-	_button(Rect2(78, 508, 280, 48), "صدا  " + ("روشن" if sfx_on else "خاموش"), Color("#8d97a5"), true)
+	_button(Rect2(78, 308, 280, 48), "مراحل داستانی", GOLD, true, true)
+	_button(Rect2(78, 366, 280, 48), "بقای بی‌پایان", Color("#e5a458"), true, true)
+	_button(Rect2(78, 424, 280, 48), "مسابقات پنج‌دوره‌ای", Color("#7eb6ff"), true, true)
+	_button(Rect2(78, 482, 280, 42), "راهنمای بازی", Color("#8d97a5"), true)
+	_button(Rect2(78, 534, 280, 40), "صدا  " + ("روشن" if sfx_on else "خاموش"), Color("#8d97a5"), true)
 	var total := 0
 	for s in stars:
 		total += int(s)
-	_text("پیروزی‌ها  " + str(wins) + "    ستاره‌ها  " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 590), 14, MUTED)
-	_text("VERSION 0.5.0", Vector2(80, 680), 12, Color("#66707c"))
+	_text("پیروزی‌ها " + str(wins) + "  ·  ستاره‌ها " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 614), 13, MUTED)
+	_text("رکورد بقا: موج " + str(best_wave) + "  ·  قهرمانی‌ها: " + str(tournament_wins), Vector2(80, 640), 12, GOLD)
+	_text("VERSION 0.6.0", Vector2(80, 684), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
@@ -1805,17 +1980,35 @@ func _draw_help() -> void:
 func _draw_result() -> void:
 	var won := ending == ""
 	draw_rect(Rect2(0, 0, W, H), Color(0.03, 0.04, 0.06, 0.72))
-	_text("پیروزی!" if won else "شکست", Vector2(500, 200), 36, GOLD if won else RED)
-	_text(_stage_name_fa(stage_i), Vector2(540, 248), 18, MUTED)
-	if won:
-		for k in 3:
-			_gem(Vector2(560 + k * 48, 300), result_stars > k)
-		_text("مرحلهٔ بعدی باز شد.", Vector2(500, 380), 16, BONE)
+	var title := "پیروزی!" if won else "شکست"
+	if game_mode == "survival":
+		title = "پایان بقا"
+	elif game_mode == "tournament" and won:
+		title = "قهرمانی!"
+	_text(title, Vector2(470, 200), 36, GOLD if won else RED)
+	if game_mode == "survival":
+		_text("تا موج " + str(survival_wave) + " دوام آوردی؛ رکورد: " + str(maxi(best_wave, survival_wave)), Vector2(390, 256), 18, BONE)
+		_text("هر موج سخت‌تر است؛ ارتش و منابع را بهتر مدیریت کن.", Vector2(410, 300), 15, MUTED)
+	elif game_mode == "tournament":
+		_text("مسابقات پنج‌دوره‌ای  ·  دور " + str(tournament_round) + "/5", Vector2(430, 256), 18, BONE)
+		_text("قهرمانی‌های ثبت‌شده: " + str(tournament_wins + (1 if won else 0)), Vector2(460, 300), 15, MUTED)
 	else:
-		_text("نیروها و منابع را بهتر مدیریت کن و دوباره تلاش کن.", Vector2(420, 320), 16, BONE)
-	_button(Rect2(430, 470, 420, 56), "مرحلهٔ بعد" if won and stage_i + 1 < STAGES.size() else ("نقشهٔ مراحل" if won else "تلاش دوباره"), GOLD, true)
-	_button(Rect2(430, 538, 200, 48), "تکرار", BLUE, true)
-	_button(Rect2(650, 538, 200, 48), "نقشه", MUTED, true)
+		_text(_stage_name_fa(stage_i), Vector2(540, 248), 18, MUTED)
+		if won:
+			for k in 3:
+				_gem(Vector2(560 + k * 48, 300), result_stars > k)
+			_text("مرحلهٔ بعدی باز شد.", Vector2(500, 380), 16, BONE)
+		else:
+			_text("نیروها و منابع را بهتر مدیریت کن و دوباره تلاش کن.", Vector2(420, 320), 16, BONE)
+	var primary_label := "تلاش دوباره"
+	if won:
+		if game_mode == "campaign":
+			primary_label = "مرحلهٔ بعد" if stage_i + 1 < STAGES.size() else "نقشهٔ مراحل"
+		else:
+			primary_label = "بازگشت به منو"
+	_button(Rect2(430, 470, 420, 56), primary_label, GOLD, true)
+	_button(Rect2(430, 538, 200, 48), "تکرار" if game_mode == "campaign" else "شروع دوباره", BLUE, true)
+	_button(Rect2(650, 538, 200, 48), "نقشه" if game_mode == "campaign" else "منو", MUTED, true)
 
 func _gem(center: Vector2, filled: bool) -> void:
 	var r := 8.0
