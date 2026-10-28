@@ -11,6 +11,9 @@ const AWAY_X := 1112.0
 const MINE_X := 640.0
 const MINE_Y := 512.0
 const BAG_MAX := 90.0
+const JOY_C := Vector2(96, 508)
+const ACT_C := Vector2(1184, 508)
+const JOY_R := 54.0
 
 const GOLD := Color("#e2b34a")
 const BONE := Color("#f3efe6")
@@ -315,6 +318,7 @@ func _spawn(side: int, kind: String) -> int:
 		"slot": rng.randf_range(-30.0, 30.0),
 		"moving": false,
 		"leap": 0.0, "leap_x": 0.0, "leap_y": 0.0,
+		"swing": 0.0, "pins": 0,
 	})
 	return id
 
@@ -441,6 +445,7 @@ func _command(i: int, dt: float) -> void:
 	u["stun"] = maxf(0.0, float(u["stun"]) - dt)
 	u["flash"] = maxf(0.0, float(u["flash"]) - dt)
 	u["cd"] = maxf(0.0, float(u["cd"]) - dt)
+	u["swing"] = maxf(0.0, float(u.get("swing", 0.0)) - dt)
 	u["moving"] = false
 	if float(u["dead"]) > 0.0:
 		units[i] = u
@@ -459,8 +464,8 @@ func _command(i: int, dt: float) -> void:
 		units[i] = u
 		return
 	var stick := _stick()
-	var manual := int(u["side"]) == 0 and int(u["id"]) == selected_id and (stick.length() > 0.16 or (action_held and str(u["kind"]) == "MINER"))
-	if manual:
+	var controlled := int(u["side"]) == 0 and int(u["id"]) == selected_id
+	if controlled:
 		_manual(u, dt, stick)
 	elif str(u["kind"]) == "MINER":
 		_miner_ai(u, dt)
@@ -488,12 +493,10 @@ func _manual(u: Dictionary, dt: float, stick: Vector2) -> void:
 		if absf(v.x) > 0.2:
 			u["facing"] = 1.0 if v.x > 0.0 else -1.0
 		u["anim"] = float(u["anim"]) + step_distance * 0.105
-	if str(u["kind"]) == "MINER" and action_held:
+	if str(u["kind"]) == "MINER":
 		_dig(u, dt, true)
-		_try_attack(u)
-	else:
-		if not _try_attack(u):
-			_maybe_statue(u)
+	if not _try_attack(u):
+		_maybe_statue(u)
 
 func _miner_ai(u: Dictionary, dt: float) -> void:
 	var side := int(u["side"])
@@ -538,6 +541,18 @@ func _try_deposit(u: Dictionary) -> void:
 	_floater(Vector2(float(u["x"]), float(u["y"]) - 58.0), "+" + str(gained), GOLD)
 	_sfx("coin")
 
+func _anchor(side: int, kind: String, order: String) -> float:
+	var back := kind == "ARCHER" or kind == "MAGE"
+	if order == "garrison":
+		return 220.0 if side == 0 else 1060.0
+	if order == "defend":
+		if side == 0:
+			return 268.0 if back else 372.0
+		return 1012.0 if back else 908.0
+	if back:
+		return 860.0 if side == 0 else 420.0
+	return (AWAY_X - 52.0) if side == 0 else (HOME_X + 52.0)
+
 func _combat_ai(u: Dictionary, dt: float) -> void:
 	var side := int(u["side"])
 	var kind := str(u["kind"])
@@ -577,18 +592,19 @@ func _combat_ai(u: Dictionary, dt: float) -> void:
 				u["facing"] = 1.0 if fp2.x >= pos.x else -1.0
 				_try_attack(u)
 				return
-		var line := 310.0 if side == 0 else 970.0
-		_walk(u, Vector2(line, (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"])), speed, dt)
+		var line := _anchor(side, kind, "defend")
+		_walk(u, Vector2(line, (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"]) * 0.45), speed, dt)
 		return
 	if order == "garrison":
-		var gx := 214.0 if side == 0 else 1066.0
-		_walk(u, Vector2(gx, (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"])), speed, dt)
+		var gx := _anchor(side, kind, "garrison")
+		_walk(u, Vector2(gx, (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"]) * 0.45), speed, dt)
 		if foe >= 0:
 			_try_attack(u)
 		return
 	var statue_x := AWAY_X if side == 0 else HOME_X
-	var dest := Vector2(statue_x + (-48.0 if side == 0 else 48.0), (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"]))
-	if absf(float(u["x"]) - statue_x) <= reach + 34.0:
+	var dest_x := _anchor(side, kind, "attack")
+	var dest := Vector2(dest_x, (LANE_TOP + LANE_BOT) * 0.5 + float(u["slot"]) * 0.45)
+	if absf(float(u["x"]) - statue_x) <= reach + 34.0 or (not melee and absf(float(u["x"]) - dest_x) < 22.0):
 		u["facing"] = 1.0 if side == 0 else -1.0
 		if not _try_attack(u):
 			_maybe_statue(u)
@@ -619,6 +635,7 @@ func _try_attack(u: Dictionary) -> bool:
 		return false
 	var f: Dictionary = units[foe]
 	u["cd"] = float(st["cd"])
+	u["swing"] = 0.28
 	u["facing"] = 1.0 if float(f["x"]) >= float(u["x"]) else -1.0
 	var dmg := _dmg(u)
 	if bool(st["melee"]):
@@ -643,6 +660,7 @@ func _maybe_statue(u: Dictionary) -> void:
 	if order != "attack" and not controlled:
 		return
 	u["cd"] = float(STATS[str(u["kind"])]["cd"])
+	u["swing"] = 0.28
 	u["facing"] = 1.0 if side == 0 else -1.0
 	var dmg := _dmg(u)
 	if str(u["kind"]) == "GIANT":
@@ -656,7 +674,7 @@ func _maybe_statue(u: Dictionary) -> void:
 func _dmg(u: Dictionary) -> float:
 	var amount := float(STATS[str(u["kind"])]["dmg"])
 	if int(u["side"]) == 0 and int(u["id"]) == selected_id:
-		amount *= 1.28
+		amount *= 2.0
 	return amount
 
 func _shoot(u: Dictionary, tx: float, ty: float, dmg: float, at_statue: bool) -> void:
@@ -727,7 +745,14 @@ func _enemy_think() -> void:
 	elif _military(1) < int(stg["atk"]) + 3:
 		_enqueue(1, _roll(stg["mix"]))
 	var eh := enemy_hp / maxf(1.0, enemy_max)
-	if eh < 0.3 or _military(1) >= int(stg["atk"]):
+	var pushed := false
+	for u in units:
+		if int(u["side"]) == 0 and str(u["kind"]) != "MINER" and float(u["dead"]) <= 0.0 and float(u["x"]) > 760.0:
+			pushed = true
+			break
+	if pushed and _military(1) < int(stg["atk"]):
+		e_order = "defend"
+	elif eh < 0.35 or _military(1) >= int(stg["atk"]):
 		e_order = "attack"
 	else:
 		e_order = "defend"
@@ -871,6 +896,8 @@ func _projectiles(dt: float) -> void:
 				if int(u["side"]) == int(p["side"]) or float(u["dead"]) > 0.0:
 					continue
 				if Vector2(float(p["x"]), float(p["y"])).distance_to(Vector2(float(u["x"]), float(u["y"]) - 28.0)) <= (22.0 if str(u["kind"]) == "GIANT" else 15.0):
+					if str(p["kind"]) == "ARCHER":
+						u["pins"] = mini(5, int(u.get("pins", 0)) + 1)
 					if str(p["kind"]) == "MAGE":
 						_mage_splash(p)
 					else:
@@ -1025,10 +1052,10 @@ func _pointer_down(id: int, screen_pos: Vector2) -> void:
 	var p := _to_game(screen_pos)
 	var rec := {"p": p, "o": p, "kind": "field", "btn": ""}
 	if screen == "battle" and not paused and ending == "" and intro_t <= 0.0:
-		if p.distance_to(Vector2(86, 664)) <= 70.0:
+		if p.distance_to(JOY_C) <= JOY_R + 22.0:
 			rec["kind"] = "joy"
 			_set_joy(p)
-		elif p.distance_to(Vector2(1194, 664)) <= 64.0:
+		elif p.distance_to(ACT_C) <= 58.0:
 			rec["kind"] = "action"
 			action_held = true
 			_use_ability()
@@ -1078,10 +1105,10 @@ func _pointer_kind(kind: String) -> bool:
 	return false
 
 func _set_joy(p: Vector2) -> void:
-	var d := p - Vector2(86, 664)
-	if d.length() > 48.0:
-		d = d.normalized() * 48.0
-	joy = d / 48.0
+	var d := p - JOY_C
+	if d.length() > JOY_R:
+		d = d.normalized() * JOY_R
+	joy = d / JOY_R
 
 func _to_game(screen_pos: Vector2) -> Vector2:
 	var viewport_size := get_viewport_rect().size
@@ -1216,10 +1243,10 @@ func _hit_button(p: Vector2) -> String:
 	return ""
 
 func _order_rect(i: int) -> Rect2:
-	return Rect2(168.0 + float(i) * 158.0, 600.0, 150.0, 42.0)
+	return Rect2(403.0 + float(i) * 162.0, 604.0, 150.0, 44.0)
 
 func _train_rect(i: int) -> Rect2:
-	return Rect2(168.0 + float(i) * 148.0, 650.0, 142.0, 58.0)
+	return Rect2(18.0 + float(i) * 210.0, 656.0, 200.0, 56.0)
 
 func _stage_rect(i: int) -> Rect2:
 	var col := i % 4
@@ -1359,60 +1386,51 @@ func _draw_mine() -> void:
 
 func _draw_statue(x: float, ratio: float, friendly: bool) -> void:
 	var team := BLUE if friendly else RED
-	var stone := Color("#59616b") if friendly else Color("#63504f")
-	var shade := stone.darkened(0.28)
-	var light := stone.lightened(0.18)
-	# Perspective base and layered stone keep.
+	var stone := Color("#c8beb0")
+	var shade := Color("#6e655c")
+	var dark := Color("#3a342f")
+	var crack := clampf(1.0 - ratio, 0.0, 1.0)
+	var lean := (1.0 if friendly else -1.0) * crack * 14.0
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 70, 548), Vector2(x - 52, 530), Vector2(x + 57, 530),
-		Vector2(x + 76, 548), Vector2(x + 64, 564), Vector2(x - 61, 564)
-	]), Color("#171f24", 0.72))
+		Vector2(x - 70, 560), Vector2(x + 74, 560), Vector2(x + 48, 572), Vector2(x - 46, 572)
+	]), Color(0, 0, 0, 0.28))
+	# Low wall the garrison stands behind.
+	var wall := x + (46.0 if friendly else -62.0)
+	draw_rect(Rect2(wall, 468, 18, 92), Color("#2c343c"))
+	draw_rect(Rect2(wall - 4, 460, 26, 12), Color("#46515b"))
+	draw_rect(Rect2(x - 58, 508, 116, 52), shade)
+	draw_rect(Rect2(x - 50, 498, 100, 16), stone)
+	draw_line(Vector2(x - 50, 522), Vector2(x + 50, 522), Color("#efe6d6"), 1.5)
+	var base := Vector2(x, 500)
+	var hip := Vector2(x + lean * 0.35, 452)
+	var neck := Vector2(x + lean * 0.7, 412)
+	var head := Vector2(x + lean, 386)
+	draw_line(hip, base + Vector2(-22, 0), shade, 7.0, true)
+	draw_line(hip, base + Vector2(24, 0), stone, 7.0, true)
+	draw_line(hip, neck, shade, 9.0, true)
+	draw_line(hip, neck, stone, 5.5, true)
+	draw_line(neck, head + Vector2(-26, 6), stone, 5.0, true)
+	draw_line(neck, head + Vector2(30, -2), stone, 5.0, true)
+	draw_circle(head, 16.0, shade)
+	draw_circle(head + Vector2(-2, -2), 13.0, stone)
+	draw_arc(head, 16.0, 0, TAU, 24, team, 2.4, true)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 54, 388), Vector2(x + 42, 388), Vector2(x + 58, 410),
-		Vector2(x + 58, 522), Vector2(x - 54, 522)
-	]), stone)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x + 42, 388), Vector2(x + 59, 408), Vector2(x + 59, 522), Vector2(x + 42, 522)
-	]), shade)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 64, 383), Vector2(x - 43, 366), Vector2(x + 48, 366),
-		Vector2(x + 62, 383), Vector2(x + 47, 397), Vector2(x - 52, 397)
-	]), light)
-	draw_rect(Rect2(x - 58, 402, 103, 18), shade)
-	for row in 4:
-		for col in 3:
-			var bx := x - 42.0 + float(col) * 30.0 + (8.0 if row % 2 == 1 else 0.0)
-			var by := 427.0 + float(row) * 25.0
-			draw_rect(Rect2(bx, by, 24, 18), Color("#f0d7a4", 0.07), false, 1.0)
-	for seam_y in [424.0, 450.0, 477.0, 503.0]:
-		draw_line(Vector2(x - 49, seam_y), Vector2(x + 39, seam_y), Color("#c2b59d", 0.36), 1.5)
-	# Tall central tower, crenellations and deep-set gate.
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 33, 388), Vector2(x - 28, 341), Vector2(x - 15, 329),
-		Vector2(x + 24, 329), Vector2(x + 37, 341), Vector2(x + 42, 388)
-	]), stone.lightened(0.06))
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x + 24, 329), Vector2(x + 42, 341), Vector2(x + 42, 388), Vector2(x + 24, 388)
-	]), shade)
-	draw_rect(Rect2(x - 34, 348, 78, 9), shade)
-	for crenel in 5:
-		var cx := x - 31.0 + float(crenel) * 17.0
-		draw_rect(Rect2(cx, 334, 11, 15), light if crenel % 2 == 0 else stone)
-	draw_rect(Rect2(x - 13, 361, 23, 27), Color("#222a31"))
-	draw_arc(Vector2(x - 1.5, 362), 11.5, PI, TAU, 16, Color("#b9a98a"), 2.0, true)
-	draw_rect(Rect2(x - 8, 369, 13, 19), Color("#111a20"))
-	draw_line(Vector2(x - 2, 369), Vector2(x - 2, 387), Color("#8f7651"), 1.0)
-	# Original team pennant and bright core.
-	draw_line(Vector2(x + 4, 296), Vector2(x + 4, 337), Color("#a88a5d"), 3.0, true)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x + 5, 298), Vector2(x + 31, 306), Vector2(x + 5, 319)
+		head + Vector2(-10, -12), head + Vector2(0, -24), head + Vector2(10, -12)
 	]), team)
+	if crack > 0.18:
+		draw_line(hip + Vector2(-6, 8), neck + Vector2(8, 6), dark, 1.6, true)
+	if crack > 0.45:
+		draw_line(head + Vector2(-6, 2), head + Vector2(7, 8), dark, 1.8, true)
+		draw_line(base + Vector2(-8, -6), hip + Vector2(4, 10), dark, 1.4, true)
+	if crack > 0.72:
+		draw_line(neck + Vector2(-4, 4), hip + Vector2(16, 18), dark, 2.2, true)
+		draw_circle(base + Vector2(30, 6), 4.0, shade)
+	draw_line(Vector2(x + lean * 0.2, 348), Vector2(x + lean * 0.2, 376), Color("#a88a5d"), 3.0, true)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(x, 310), Vector2(x + 10, 322), Vector2(x, 334), Vector2(x - 10, 322)
-	]), team.lerp(GOLD, 0.38))
-	draw_line(Vector2(x - 48, 543), Vector2(x + 48, 543), Color("#d7bd8b", 0.45), 2.0)
-	draw_rect(Rect2(x - 44, 574, 88, 8), Color(0, 0, 0, 0.62))
-	draw_rect(Rect2(x - 42, 576, 84.0 * clampf(ratio, 0.0, 1.0), 4), team)
+		Vector2(x + lean * 0.2, 350), Vector2(x + lean * 0.2 + 26, 358), Vector2(x + lean * 0.2, 368)
+	]), team)
+	draw_rect(Rect2(x - 48, 574, 96, 8), Color(0, 0, 0, 0.62))
+	draw_rect(Rect2(x - 46, 576, 92.0 * clampf(ratio, 0.0, 1.0), 4), team)
 
 func _draw_shot(p: Dictionary) -> void:
 	var a := Vector2(float(p["x"]), float(p["y"]))
@@ -1423,78 +1441,89 @@ func _draw_shot(p: Dictionary) -> void:
 	else:
 		draw_line(b, a, col, 2.0, true)
 
+func _star(c: Vector2, r: float, color: Color) -> void:
+	var pts := PackedVector2Array()
+	for i in 8:
+		var ang := -PI * 0.5 + float(i) * TAU / 8.0
+		var rad := r if i % 2 == 0 else r * 0.42
+		pts.append(c + Vector2(cos(ang), sin(ang)) * rad)
+	draw_colored_polygon(pts, color)
+
+func _limb(a: Vector2, b: Vector2, c: Vector2, color: Color, width: float) -> void:
+	draw_line(a, b, color, width, true)
+	draw_line(b, c, color, width, true)
+
 func _draw_stick(u: Dictionary) -> void:
 	var kind := str(u["kind"])
-	var st: Dictionary = STATS[kind]
-	var sc := float(st["scale"])
+	var sc := float(STATS[kind]["scale"])
 	var x := float(u["x"])
 	var y := float(u["y"])
-	var facing := float(u["facing"])
-	var walk := sin(float(u["anim"])) if bool(u.get("moving", false)) else 0.0
-	var dead := float(u["dead"])
+	var facing := float(u.get("facing", 1.0))
+	var moving := bool(u.get("moving", false))
+	var phase := float(u.get("anim", 0.0))
+	var dead := float(u.get("dead", 0.0))
 	var team := BLUE if int(u["side"]) == 0 else RED
+	var ink := Color("#1c140e")
+	var skin := Color("#f6f1e8")
+	if float(u.get("flash", 0.0)) > 0.0:
+		skin = Color("#ffd0c4")
 	if dead > 0.0:
-		y += (0.55 - dead) * 26.0
-		walk = 0.0
-	if int(u["id"]) == selected_id and int(u["side"]) == 0 and dead <= 0.0:
-		var pulse := 0.65 + 0.35 * sin(tick * 6.0)
-		draw_arc(Vector2(x, y + 2.0), 18.0 * sc, 0.0, TAU, 22, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.0, true)
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(x, y - 78.0 * sc), Vector2(x - 6, y - 68.0 * sc), Vector2(x + 6, y - 68.0 * sc)
-		]), GOLD)
-	var skin := BONE
-	if float(u["flash"]) > 0.0:
-		skin = Color("#ffb4b4")
-	var idle_bob := sin(tick * 2.5 + float(u["id"])) * 0.7 if not bool(u.get("moving", false)) and dead <= 0.0 else 0.0
-	var bob := absf(walk) * 1.5 * sc + idle_bob
-	var hip := Vector2(x, y - 18.0 * sc + bob)
-	var chest := Vector2(x - facing * (1.0 + walk * 2.0) * sc, y - 35.0 * sc + bob)
-	var head := Vector2(chest.x + facing * 1.0 * sc, y - 49.0 * sc + bob)
-	var lw := 3.8 * sc
-	var foot_lift_a := maxf(0.0, cos(float(u["anim"]))) * 3.5 * sc if bool(u.get("moving", false)) else 0.0
-	var foot_lift_b := maxf(0.0, -cos(float(u["anim"]))) * 3.5 * sc if bool(u.get("moving", false)) else 0.0
-	var foot_a := Vector2(x - (7.0 + walk * 5.0) * sc, y - foot_lift_a)
-	var foot_b := Vector2(x + (7.0 + walk * 5.0) * sc, y - foot_lift_b)
+		var fall := clampf(1.0 - dead / 0.55, 0.0, 1.0)
+		var head := Vector2(x + facing * 22.0 * fall, y - 34.0 * (1.0 - fall) - 4.0)
+		draw_line(Vector2(x - 18, y - 2), head, ink, 3.4 * sc, true)
+		draw_circle(head, 6.2 * sc, skin)
+		draw_arc(head, 6.2 * sc, 0.0, TAU, 12, team, 1.6, true)
+		return
+	var swing_t := float(u.get("swing", 0.0))
+	var step := sin(phase) if moving or (kind == "MINER" and swing_t <= 0.0) else 0.0
+	var bob := absf(step) * 2.2 * sc
+	var hip := Vector2(x, y - 17.0 * sc - bob)
+	var neck := Vector2(x - facing * step * 1.2 * sc, y - 40.0 * sc - bob)
+	var head := Vector2(neck.x + facing * 0.6 * sc, y - 50.0 * sc - bob)
+	if int(u.get("id", -99)) == selected_id and int(u["side"]) == 0:
+		var pulse := 0.55 + 0.45 * sin(tick * 7.0)
+		draw_arc(Vector2(x, y + 2.0), 16.0 * sc, 0.0, TAU, 20, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.0, true)
+		_star(Vector2(x, head.y - 16.0 * sc), 7.0, GOLD)
 	var shadow := PackedVector2Array()
-	for j in 16:
-		var angle := TAU * float(j) / 16.0
-		shadow.append(Vector2(x + cos(angle) * 12.0 * sc, y + 1.5 + sin(angle) * 3.0 * sc))
-	draw_colored_polygon(shadow, Color(0.02, 0.03, 0.03, 0.32))
-	var knee_a := Vector2((hip.x + foot_a.x) * 0.5 + walk * 2.0 * sc, y - 9.0 * sc - foot_lift_a * 0.4)
-	var knee_b := Vector2((hip.x + foot_b.x) * 0.5 - walk * 2.0 * sc, y - 9.0 * sc - foot_lift_b * 0.4)
-	draw_line(hip + Vector2(-3.0 * sc, 0), knee_b, team.darkened(0.28), 5.0 * sc, true)
-	draw_line(knee_b, foot_b + Vector2(0, -1.5 * sc), skin.darkened(0.15), 3.8 * sc, true)
-	draw_circle(knee_b, 2.0 * sc, skin.darkened(0.1))
-	draw_line(hip + Vector2(3.0 * sc, 0), knee_a, team, 5.2 * sc, true)
-	draw_line(knee_a, foot_a + Vector2(0, -1.5 * sc), skin, 4.0 * sc, true)
-	draw_circle(knee_a, 2.2 * sc, skin)
-	draw_colored_polygon(PackedVector2Array([foot_b + Vector2(-4.0 * sc, 0), foot_b + Vector2(3.0 * sc, -1.5 * sc), foot_b + Vector2(6.0 * sc, 0), foot_b + Vector2(3.0 * sc, 1.5 * sc), foot_b + Vector2(-4.0 * sc, 1.5 * sc)]), Color("#252b30"))
-	draw_colored_polygon(PackedVector2Array([foot_a + Vector2(-4.0 * sc, 0), foot_a + Vector2(3.0 * sc, -1.5 * sc), foot_a + Vector2(6.0 * sc, 0), foot_a + Vector2(3.0 * sc, 1.5 * sc), foot_a + Vector2(-4.0 * sc, 1.5 * sc)]), Color("#3a4248"))
-	draw_colored_polygon(PackedVector2Array([chest + Vector2(-7.0 * sc, -2.0 * sc), chest + Vector2(5.0 * sc, -3.0 * sc), hip + Vector2(7.0 * sc, 2.0 * sc), hip + Vector2(4.0 * sc, 6.0 * sc), hip + Vector2(-6.0 * sc, 5.0 * sc), chest + Vector2(-8.0 * sc, 4.0 * sc)]), team.darkened(0.32))
-	draw_colored_polygon(PackedVector2Array([chest + Vector2(-5.0 * sc, -3.0 * sc), chest + Vector2(3.0 * sc, -4.0 * sc), hip + Vector2(4.0 * sc, 0), hip + Vector2(1.0 * sc, 4.0 * sc), hip + Vector2(-5.0 * sc, 3.0 * sc), chest + Vector2(-6.0 * sc, 3.0 * sc)]), team.lightened(0.08))
-	draw_line(hip + Vector2(-5.0 * sc, 1.0 * sc), hip + Vector2(5.0 * sc, 1.0 * sc), GOLD, 1.8 * sc, true)
-	var arm_f := Vector2(x + facing * (10.0 + walk * 2.5) * sc, y - 29.0 * sc + bob)
-	var arm_b := Vector2(x - facing * 8.0 * sc - walk * 2.5 * sc, y - 28.0 * sc - walk * 1.5 * sc + bob)
-	var elbow_f := arm_f + Vector2(facing * 2.0 * sc, 5.0 * sc)
-	var elbow_b := arm_b + Vector2(-facing * 1.0 * sc, 5.0 * sc)
-	draw_line(chest + Vector2(-facing * 5.0 * sc, 0), elbow_b, skin.darkened(0.1), lw, true)
-	draw_line(elbow_b, arm_b + Vector2(0, 5.0 * sc), skin, lw - 0.4, true)
-	draw_circle(elbow_b, 2.0 * sc, skin.darkened(0.1))
-	draw_line(chest + Vector2(facing * 5.0 * sc, 0), elbow_f, skin, lw, true)
-	draw_line(elbow_f, arm_f, skin, lw - 0.4, true)
-	draw_circle(elbow_f, 2.0 * sc, skin)
-	draw_colored_polygon(PackedVector2Array([chest + Vector2(-6.0 * sc, -2.0 * sc), chest + Vector2(-1.0 * sc, -4.0 * sc), chest + Vector2(2.0 * sc, 1.0 * sc), chest + Vector2(-5.0 * sc, 3.0 * sc)]), Color("#9ca8b4"))
-	draw_colored_polygon(PackedVector2Array([chest + Vector2(2.0 * sc, -4.0 * sc), chest + Vector2(7.0 * sc, -2.0 * sc), chest + Vector2(8.0 * sc, 2.0 * sc), chest + Vector2(3.0 * sc, 3.0 * sc)]), Color("#c3cbd2"))
-	draw_circle(head, 6.8 * sc, skin.darkened(0.16))
-	draw_circle(head + Vector2(-facing * 1.0 * sc, -0.8 * sc), 5.7 * sc, skin)
-	draw_circle(head + Vector2(facing * 2.2 * sc, -0.5 * sc), 1.0 * sc, Color("#1c1a17"))
-	_draw_weapon(kind, arm_f, facing, sc, float(u["anim"]) if kind == "MINER" else walk, float(u["block"]))
-	if dead <= 0.0 and (float(u["hp"]) < float(u["max_hp"]) or int(u["id"]) == selected_id):
-		var ratio := clampf(float(u["hp"]) / float(u["max_hp"]), 0.0, 1.0)
-		draw_rect(Rect2(x - 16, y - 66.0 * sc, 32, 3.5), Color(0, 0, 0, 0.55))
-		draw_rect(Rect2(x - 16, y - 66.0 * sc, 32.0 * ratio, 3.5), GREEN if int(u["side"]) == 0 else RED)
-	if kind == "MINER" and float(u["bag"]) > 2.0 and dead <= 0.0:
-		_text(str(int(u["bag"])), Vector2(x - 8, y - 78.0 * sc), 11, GOLD)
+	for j in 12:
+		var ang := TAU * float(j) / 12.0
+		shadow.append(Vector2(x + cos(ang) * 11.0 * sc, y + 2.0 + sin(ang) * 3.2 * sc))
+	draw_colored_polygon(shadow, Color(0, 0, 0, 0.28))
+	var lift_a := maxf(0.0, step) * 7.0 * sc
+	var lift_b := maxf(0.0, -step) * 7.0 * sc
+	var foot_a := Vector2(x + facing * (4.0 + step * 8.0) * sc, y - lift_a)
+	var foot_b := Vector2(x - facing * (4.0 + step * 8.0) * sc, y - lift_b)
+	var knee_a := Vector2(x + facing * step * 3.0 * sc, y - 8.0 * sc - lift_a * 0.35)
+	var knee_b := Vector2(x - facing * step * 3.0 * sc, y - 8.0 * sc - lift_b * 0.35)
+	_limb(hip, knee_b, foot_b, ink, 3.3 * sc)
+	_limb(hip, knee_a, foot_a, ink, 3.3 * sc)
+	draw_line(hip, neck, team, 6.2 * sc, true)
+	draw_line(hip, neck, ink, 3.1 * sc, true)
+	var strike := 0.0
+	if swing_t > 0.0:
+		strike = sin(clampf((0.28 - swing_t) / 0.28, 0.0, 1.0) * PI)
+	var arm_f := Vector2(x + facing * (8.0 + strike * 10.0) * sc, y - (32.0 - strike * 16.0) * sc - bob)
+	var arm_b := Vector2(x - facing * (7.0 - step * 4.0) * sc, y - 30.0 * sc - bob + step * 3.0 * sc)
+	_limb(neck, neck.lerp(arm_b, 0.5) + Vector2(0, 5.0 * sc), arm_b, ink, 2.7 * sc)
+	_limb(neck, neck.lerp(arm_f, 0.5) + Vector2(0, (4.0 - strike * 8.0) * sc), arm_f, ink, 2.7 * sc)
+	draw_circle(head, 7.4 * sc, team)
+	draw_circle(head + Vector2(-facing * 0.4, -0.6 * sc), 5.8 * sc, skin)
+	draw_circle(head + Vector2(facing * 2.3 * sc, 0.2 * sc), 1.05 * sc, ink)
+	if kind == "MINER" and float(u.get("bag", 0.0)) > 6.0:
+		var br := 3.2 + float(u["bag"]) / BAG_MAX * 5.5
+		var bag_at := Vector2(x - facing * 8.0 * sc, hip.y - 2.0)
+		draw_circle(bag_at, br, Color("#8a6a2f"))
+		draw_circle(bag_at + Vector2(-1, -1), br * 0.72, GOLD)
+	var weapon_phase := swing_t if swing_t > 0.0 or kind != "MINER" else phase
+	_draw_weapon(kind, arm_f, facing, sc, weapon_phase, float(u.get("block", 0.0)))
+	var pins := int(u.get("pins", 0))
+	for n in pins:
+		var px := x - 8.0 + float(n) * 4.0
+		draw_line(Vector2(px, neck.y + 6.0), Vector2(px - facing * 7.0, neck.y - 4.0), GOLD, 1.5, true)
+	if dead <= 0.0 and (float(u.get("hp", 1.0)) < float(u.get("max_hp", 1.0)) or int(u.get("id", -1)) == selected_id):
+		var ratio := clampf(float(u.get("hp", 1.0)) / maxf(1.0, float(u.get("max_hp", 1.0))), 0.0, 1.0)
+		draw_rect(Rect2(x - 16, head.y - 16.0, 32, 3.5), Color(0, 0, 0, 0.55))
+		draw_rect(Rect2(x - 16, head.y - 16.0, 32.0 * ratio, 3.5), GREEN if int(u["side"]) == 0 else RED)
 
 func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, anim_phase: float, block: float) -> void:
 	var dir := facing
@@ -1527,8 +1556,10 @@ func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, anim_ph
 		draw_line(hand, hand + Vector2(dir * 26.0 * sc, -8.0 * sc), Color("#6b5140"), 7.0 * sc, true)
 		draw_circle(hand + Vector2(dir * 30.0 * sc, -8.0 * sc), 8.0 * sc, Color("#8d8378"))
 	else:
-		draw_line(hand, hand + Vector2(dir * 18.0 * sc, -16.0 * sc), Color("#e7edf4"), 2.6 * sc, true)
-		draw_line(hand + Vector2(dir * 14.0 * sc, -12.0 * sc), hand + Vector2(dir * 22.0 * sc, -20.0 * sc), GOLD, 2.0 * sc, true)
+		var down := anim_phase > 0.0 and anim_phase < 0.3
+		var tip := hand + Vector2(dir * (20.0 if down else 16.0) * sc, (4.0 if down else -18.0) * sc)
+		draw_line(hand, tip, Color("#e7edf4"), 2.8 * sc, true)
+		draw_line(tip + Vector2(-dir * 2.0 * sc, -2.0 * sc), tip + Vector2(dir * 4.0 * sc, 1.0 * sc), GOLD, 2.2 * sc, true)
 
 func _stage_name_fa(index: int) -> String:
 	var names := ["راه غبارآلود", "درهٔ کمان", "صف سپرها", "محفل خاکستر", "راه سنگی", "دو پرچم", "سپاه شب", "تاج چوبین"]
@@ -1573,11 +1604,13 @@ func _draw_battle_ui() -> void:
 		var ratio := clampf(player_train_t / maxf(0.1, total), 0.0, 1.0)
 		_text("آموزش " + _unit_name_fa(str(player_queue[0])) + "  " + String.num(maxf(0.0, player_train_t), 1) + " ثانیه", Vector2(820, 48), 13, BONE)
 		_bar(Rect2(820, 54, 200, 6), 1.0 - ratio, GOLD)
+	draw_rect(Rect2(0, 592, W, 128), Color(0.035, 0.045, 0.06, 0.94))
+	draw_line(Vector2(0, 592), Vector2(W, 592), Color(GOLD.r, GOLD.g, GOLD.b, 0.9), 2.0)
 	for i in 3:
-		var names: Array = ["پیشروی", "دفاع", "بازگشت"]
+		var names: Array = ["حمله", "دفاع", "عقب‌نشینی"]
 		var ids: Array = ["attack", "defend", "garrison"]
 		var on: bool = p_order == str(ids[i])
-		_button(_order_rect(i), names[i], GOLD if on else Color("#8d97a5"), true)
+		_button(_order_rect(i), names[i], GOLD if on else Color("#8d97a5"), true, on)
 	for i in KIND_ORDER.size():
 		_draw_train(i)
 	_draw_joy()
@@ -1607,17 +1640,24 @@ func _draw_train(i: int) -> void:
 	var afford := gold >= int(st["cost"]) and _pop(0) + int(st["pop"]) <= int(_stage()["cap"])
 	var accent := GOLD if on and afford else Color("#5c6570")
 	_button(rect, "", accent, on)
-	_text(_unit_name_fa(kind), rect.position + Vector2(10, 24), 14, BONE if on else MUTED)
-	_text(str(int(st["cost"])) + "g  ·  " + str(int(st["pop"])), rect.position + Vector2(10, 46), 12, GOLD if on and afford else Color("#a86868"))
+	_text(_unit_name_fa(kind), rect.position + Vector2(12, 24), 15, BONE if on else MUTED)
+	_text(str(int(st["cost"])) + " طلا  ·  " + str(int(st["pop"])), rect.position + Vector2(12, 46), 12, GOLD if on and afford else Color("#a86868"))
+	var queued := 0
+	for queued_kind in player_queue:
+		if str(queued_kind) == kind:
+			queued += 1
+	if queued > 0:
+		_text("×" + str(queued), rect.position + Vector2(rect.size.x - 28, 24), 14, GOLD)
 
 func _draw_joy() -> void:
-	var c := Vector2(86, 664)
-	draw_circle(c, 52, Color(0, 0, 0, 0.35))
-	draw_arc(c, 48, 0, TAU, 28, Color("#9aa4b2"), 2.0, true)
-	draw_circle(c + joy * 28.0, 18, Color("#e7edf4"))
+	var c := JOY_C
+	draw_circle(c, JOY_R + 8.0, Color(0, 0, 0, 0.32))
+	draw_arc(c, JOY_R, 0, TAU, 32, Color(1, 1, 1, 0.38), 3.0, true)
+	draw_circle(c + joy * (JOY_R * 0.55), 20, Color("#f4efe6"))
+	draw_arc(c + joy * (JOY_R * 0.55), 20, 0, TAU, 18, GOLD, 2.0, true)
 
 func _draw_action() -> void:
-	var c := Vector2(1194, 664)
+	var c := ACT_C
 	var ready := true
 	var frac := 0.0
 	var index := _index_of(selected_id)
@@ -1630,7 +1670,27 @@ func _draw_action() -> void:
 	draw_arc(c, 36, 0, TAU, 28, GOLD if ready else MUTED, 3.0, true)
 	if frac > 0.0:
 		draw_arc(c, 30, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 24, Color("#3d8bfd"), 4.0, true)
-	_text("مهارت", c + Vector2(-22, 5), 14, BONE if ready else MUTED)
+	var skill := "حمله"
+	if index >= 0:
+		skill = _ability_label(str(units[index]["kind"]))
+	_text(skill, c + Vector2(-26, 5), 13, BONE if ready else MUTED)
+
+func _ability_label(kind: String) -> String:
+	match kind:
+		"MINER":
+			return "کندن"
+		"SWORD":
+			return "جهش"
+		"ARCHER":
+			return "رگبار"
+		"SPEAR":
+			return "سپر"
+		"MAGE":
+			return "انفجار"
+		"GIANT":
+			return "کوبش"
+		_:
+			return "حمله"
 
 func _ability_max(kind: String) -> float:
 	match kind:
@@ -1664,7 +1724,7 @@ func _draw_menu() -> void:
 	for s in stars:
 		total += int(s)
 	_text("پیروزی‌ها  " + str(wins) + "    ستاره‌ها  " + str(total) + "/24", Vector2(80, 590), 14, MUTED)
-	_text("VERSION 0.3.0", Vector2(80, 680), 12, Color("#66707c"))
+	_text("VERSION 0.4.0", Vector2(80, 680), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
@@ -1738,9 +1798,14 @@ func _gem(center: Vector2, filled: bool) -> void:
 		line.append(pts[0])
 		draw_polyline(line, Color("#66707c"), 1.6, true)
 
-func _button(rect: Rect2, label: String, accent: Color, enabled: bool) -> void:
-	draw_rect(Rect2(rect.position + Vector2(0, 3), rect.size), Color(0, 0, 0, 0.28))
-	draw_rect(rect, INK if enabled else Color(0.04, 0.05, 0.07, 0.9))
+func _button(rect: Rect2, label: String, accent: Color, enabled: bool, filled: bool = false) -> void:
+	draw_rect(Rect2(rect.position + Vector2(0, 3), rect.size), Color(0, 0, 0, 0.35))
+	var fill := Color(0.07, 0.09, 0.12, 0.96)
+	if filled:
+		fill = Color(accent.r, accent.g, accent.b, 0.30)
+	elif not enabled:
+		fill = Color(0.04, 0.05, 0.07, 0.9)
+	draw_rect(rect, fill)
 	draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.95 if enabled else 0.35), false, 2.0)
 	if label != "":
 		_text_in(rect, label, 15, BONE if enabled else MUTED)

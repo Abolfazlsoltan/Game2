@@ -5,10 +5,10 @@
 A landscape stick-legion battle for Android, built with Godot 4.5.
 
 ## Play
-- Miners haul gold from the center vein back to your statue.
+- Miners haul gold from the center vein back to your statue. A miner you control digs faster.
 - Train Miner, Sword, Archer, Spear, Mage, and Giant. New troops unlock as the campaign advances.
-- **Attack** marches on the enemy statue. **Defend** holds your line. **Garrison** pulls everyone back, miners included.
-- Tap a soldier and move them with the stick. The right button is their skill. A controlled soldier hits harder.
+- **حمله** sends the line at their statue. Spears and swords take the front. Archers and mages hold a firing line behind them. **دفاع** holds your road. **عقب‌نشینی** pulls everyone, miners included, back behind the wall.
+- Tap a soldier to take direct control. They stop following the army order, a star marks them, and their hits land twice as hard. The stick moves them. The round button is their skill.
 - Destroy the enemy statue. If yours falls, the battle is lost.
 - Eight campaign battles. Stars and unlocks are saved on the device.
 
