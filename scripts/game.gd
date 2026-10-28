@@ -802,16 +802,6 @@ func _walk(u: Dictionary, dest: Vector2, speed: float, dt: float) -> void:
 		u["facing"] = 1.0 if dirv.x > 0.0 else -1.0
 	u["anim"] = float(u["anim"]) + step * (0.112 if bool(u["run"]) else 0.068)
 
-func _attack_action(kind: String) -> String:
-	match kind:
-		"MINER": return "mine"
-		"SWORD": return "slash"
-		"ARCHER": return "bow_draw"
-		"SPEAR": return "thrust"
-		"MAGE": return "cast"
-		"GIANT": return "slam"
-		_: return "slash"
-
 func _set_unit_action(u: Dictionary, action: String, duration: float) -> void:
 	u["action"] = action
 	u["action_t"] = maxf(0.05, duration)
@@ -826,9 +816,8 @@ func _try_attack(u: Dictionary) -> bool:
 		return false
 	var f: Dictionary = units[foe]
 	u["cd"] = float(st["cd"])
-	u["swing"] = 0.52
+	u["swing"] = 0.28
 	u["facing"] = 1.0 if float(f["x"]) >= float(u["x"]) else -1.0
-	_set_unit_action(u, _attack_action(str(u["kind"])), 0.52 if str(u["kind"]) != "ARCHER" else 0.64)
 	var dmg := _dmg(u)
 	if bool(st["melee"]):
 		_hurt(f, dmg, float(u["x"]))
@@ -852,9 +841,8 @@ func _maybe_statue(u: Dictionary) -> void:
 	if order != "attack" and not controlled:
 		return
 	u["cd"] = float(STATS[str(u["kind"])]["cd"])
-	u["swing"] = 0.52
+	u["swing"] = 0.28
 	u["facing"] = 1.0 if side == 0 else -1.0
-	_set_unit_action(u, _attack_action(str(u["kind"])), 0.52 if str(u["kind"]) != "ARCHER" else 0.64)
 	var dmg := _dmg(u)
 	if str(u["kind"]) == "GIANT":
 		dmg *= 1.75
@@ -987,7 +975,6 @@ func _use_ability() -> void:
 				delta = delta.normalized() * 180.0
 			if delta.length() < 24.0:
 				delta = Vector2(float(u["facing"]) * 120.0, 0.0)
-			_set_unit_action(u, "jump_slash", 0.62)
 			u["leap"] = 0.2
 			u["leap_x"] = delta.x / 0.2
 			u["leap_y"] = delta.y / 0.2
@@ -1000,11 +987,9 @@ func _use_ability() -> void:
 			if foe_a >= 0:
 				tx = float(units[foe_a]["x"])
 				ty = float(units[foe_a]["y"]) - 28.0
-			_set_unit_action(u, "bow_special", 0.72)
 			u["ability"] = 2.4
 			_shoot(u, tx, ty, _dmg(u) * 1.85, false)
 		"SPEAR":
-			_set_unit_action(u, "shield", 0.62)
 			u["block"] = 1.65
 			u["ability"] = 6.4
 			_sfx("ui")
@@ -1025,7 +1010,6 @@ func _use_ability() -> void:
 			_burst(Vector2(cx, cy - 16.0), Color("#7eb6ff"), 14)
 			_sfx("shoot")
 		"GIANT":
-			_set_unit_action(u, "slam", 0.78)
 			u["ability"] = 6.2
 			shake = 9.0
 			for other2 in units:
@@ -1696,6 +1680,13 @@ func _star(c: Vector2, r: float, color: Color) -> void:
 		pts.append(c + Vector2(cos(ang), sin(ang)) * rad)
 	draw_colored_polygon(pts, color)
 
+func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color) -> void:
+	var points := PackedVector2Array()
+	for i in 24:
+		var angle := TAU * float(i) / 24.0
+		points.append(center + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
+	draw_colored_polygon(points, color)
+
 func _draw_bone(a: Vector2, b: Vector2, width: float, color: Color) -> void:
 	var delta := b - a
 	if delta.length() < 0.5:
@@ -1836,7 +1827,7 @@ func _draw_stick(u: Dictionary) -> void:
 	if dead > 0.0:
 		var fall := clampf(1.0 - dead / 0.55, 0.0, 1.0)
 		var fallen_head := Vector2(x + facing * 31.0 * fall, y - 8.0 - 32.0 * (1.0 - fall))
-		draw_ellipse(Vector2(x, y + 2.0), Vector2(19.0 * sc, 4.5 * sc), Color(0, 0, 0, 0.26))
+		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(19.0 * sc, 4.5 * sc), Color(0, 0, 0, 0.26))
 		_draw_bone(Vector2(x - facing * 10.0, y - 7.0), fallen_head, 5.0 * sc, team)
 		_draw_joint(fallen_head, 6.8 * sc, skin)
 		draw_circle(fallen_head + Vector2(-facing * 1.5, -2.0), 3.5 * sc, skin.lightened(0.25))
@@ -1865,7 +1856,7 @@ func _draw_stick(u: Dictionary) -> void:
 		shadow.append(Vector2(x + cos(angle) * 15.0 * sc, y + 2.0 + sin(angle) * 4.2 * sc))
 	draw_colored_polygon(shadow, Color(0, 0, 0, 0.26))
 	if jump_lift > 1.0:
-		draw_ellipse(Vector2(x, y + 2.0), Vector2(10.0 * sc, 3.0 * sc), Color(0, 0, 0, 0.22))
+		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(10.0 * sc, 3.0 * sc), Color(0, 0, 0, 0.22))
 
 	var stride := (1.35 if running else 0.85) if moving else 0.0
 	var swing := gait * stride
@@ -1875,6 +1866,11 @@ func _draw_stick(u: Dictionary) -> void:
 	var foot_b := Vector2(x - facing * (5.0 + swing * 10.0) * sc, body_y - lift_b)
 	var knee_a := Vector2(x + facing * (2.5 + swing * 5.0) * sc, body_y - 12.5 * sc - lift_a * 0.4)
 	var knee_b := Vector2(x - facing * (2.5 + swing * 5.0) * sc, body_y - 12.5 * sc - lift_b * 0.4)
+	if jump_lift > 1.0:
+		foot_a = Vector2(x + facing * 10.0 * sc, body_y - 5.0 * sc)
+		foot_b = Vector2(x - facing * 8.0 * sc, body_y - 2.0 * sc)
+		knee_a = Vector2(x + facing * 7.0 * sc, body_y - 15.0 * sc)
+		knee_b = Vector2(x - facing * 5.0 * sc, body_y - 13.0 * sc)
 	var hip_a := hip + Vector2(facing * 4.0 * sc, 0)
 	var hip_b := hip - Vector2(facing * 4.0 * sc, 0)
 	var leg_color := Color("#343944") if kind != "GIANT" else Color("#665d57")
@@ -1893,7 +1889,6 @@ func _draw_stick(u: Dictionary) -> void:
 		lean -= facing * 2.0 * sc
 	var body_hip := hip + Vector2(lean, 0)
 	var body_neck := neck + Vector2(lean * 1.35, 0)
-	_draw_torso(body_hip, body_neck, facing, sc, team, kind)
 
 	var shoulder_f := body_neck + Vector2(facing * 7.0 * sc, 5.5 * sc)
 	var shoulder_b := body_neck - Vector2(facing * 7.0 * sc, -5.0 * sc)
@@ -1903,60 +1898,38 @@ func _draw_stick(u: Dictionary) -> void:
 	var elbow_b := shoulder_b + Vector2(-facing * 7.0 * sc - arm_swing, 10.0 * sc)
 	var hand_b := shoulder_b + Vector2(-facing * 10.0 * sc - arm_swing, 17.0 * sc)
 
-	# Every role has its own readable movement grammar and signature attack pose.
+	# Class silhouettes differ; the rig emphasizes idle, walk, run, jump and impact recovery.
 	if kind == "ARCHER":
-		hand_f = Vector2(x + facing * 21.0 * sc, body_y - 36.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(0, 5.0 * sc)
-		hand_b = Vector2(x - facing * 9.0 * sc, body_y - 32.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.52) + Vector2(0, 3.0 * sc)
-		if action == "bow_draw" or action == "bow_special":
-			var draw_strength := clampf((progress - 0.10) / 0.66, 0.0, 1.0)
-			hand_b = Vector2(x - facing * (9.0 + 13.0 * draw_strength) * sc, body_y - (31.0 + 2.0 * draw_strength) * sc)
-			elbow_b = shoulder_b.lerp(hand_b, 0.48) + Vector2(-facing * 1.0 * sc, 4.0 * sc)
+		hand_f = Vector2(x + facing * 17.0 * sc, body_y - 34.0 * sc)
+		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(0, 4.0 * sc)
+		hand_b = Vector2(x - facing * 8.0 * sc, body_y - 29.0 * sc)
+		elbow_b = shoulder_b.lerp(hand_b, 0.52) + Vector2(0, 4.0 * sc)
 	elif kind == "MAGE":
-		hand_f = Vector2(x + facing * 12.0 * sc, body_y - 40.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 2.0 * sc, 3.0 * sc)
-		hand_b = Vector2(x - facing * 10.0 * sc, body_y - 28.0 * sc)
+		hand_f = Vector2(x + facing * 11.0 * sc, body_y - 36.0 * sc)
+		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 2.0 * sc, 4.0 * sc)
+		hand_b = Vector2(x - facing * 9.0 * sc, body_y - 30.0 * sc)
 		elbow_b = shoulder_b.lerp(hand_b, 0.55) + Vector2(0, 4.0 * sc)
 		if action == "cast":
-			hand_f = Vector2(x + facing * 13.0 * sc, body_y - (53.0 + sin(progress * PI) * 8.0) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.5) + Vector2(facing * 3.0 * sc, 0)
-	elif kind == "SPEAR" and (action == "shield" or float(u.get("block", 0.0)) > 0.0):
-		hand_f = Vector2(x + facing * 15.0 * sc, body_y - 27.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 5.0 * sc, 0)
-		hand_b = Vector2(x - facing * 8.0 * sc, body_y - 39.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.55) + Vector2(-facing * 3.0 * sc, 0)
-	elif action == "slam" or kind == "GIANT" and action == "slash":
-		if progress < 0.48:
-			var lift := clampf(progress / 0.48, 0.0, 1.0)
-			hand_f = Vector2(x + facing * (10.0 + 7.0 * lift) * sc, body_y - (42.0 + 28.0 * lift) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 2.0 * sc, -8.0 * sc)
-		else:
-			var slam_t := clampf((progress - 0.48) / 0.52, 0.0, 1.0)
-			hand_f = Vector2(x + facing * 28.0 * sc, body_y - (69.0 - 43.0 * slam_t) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 7.0 * sc, -5.0 * sc)
-	elif action == "slash" or action == "mine" or action == "jump_slash":
-		if progress < 0.34:
-			var wind := clampf(progress / 0.34, 0.0, 1.0)
-			hand_f = Vector2(x + facing * (5.0 + 3.0 * wind) * sc, body_y - (49.0 + 16.0 * wind) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.48) + Vector2(facing * 5.0 * sc, -7.0 * sc)
-		elif progress < 0.72:
-			var cut := clampf((progress - 0.34) / 0.38, 0.0, 1.0)
-			hand_f = Vector2(x + facing * (8.0 + 17.0 * cut) * sc, body_y - (65.0 - 42.0 * cut) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 3.0 * sc, -3.0 * sc)
-		else:
-			hand_f = Vector2(x + facing * 24.0 * sc, body_y - 18.0 * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 4.0 * sc, 1.0 * sc)
-	elif action == "thrust":
-		var thrust := sin(progress * PI)
-		hand_f = Vector2(x + facing * (12.0 + 19.0 * thrust) * sc, body_y - (29.0 - 5.0 * thrust) * sc)
+			hand_f = Vector2(x + facing * 11.0 * sc, body_y - (49.0 + sin(progress * PI) * 7.0) * sc)
+			elbow_f = shoulder_f.lerp(hand_f, 0.5) + Vector2(facing * 2.0 * sc, -2.0 * sc)
+	elif kind == "SPEAR":
+		hand_f = Vector2(x + facing * 14.0 * sc, body_y - 27.0 * sc)
 		elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 4.0 * sc, 0)
-	elif action == "cast":
-		hand_f = Vector2(x + facing * 12.0 * sc, body_y - (47.0 + sin(progress * PI) * 13.0) * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 4.0 * sc, -3.0 * sc)
-	elif action == "shield":
-		hand_f = Vector2(x + facing * 15.0 * sc, body_y - 26.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.54) + Vector2(facing * 5.0 * sc, 0)
+		hand_b = Vector2(x - facing * 8.0 * sc, body_y - 34.0 * sc)
+		elbow_b = shoulder_b.lerp(hand_b, 0.55) + Vector2(-facing * 2.0 * sc, 2.0 * sc)
+	elif kind == "GIANT":
+		hand_f = Vector2(x + facing * 13.0 * sc, body_y - 30.0 * sc)
+		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 4.0 * sc, 2.0 * sc)
+	elif action == "mine":
+		if progress < 0.35:
+			var wind := clampf(progress / 0.35, 0.0, 1.0)
+			hand_f = Vector2(x + facing * (5.0 + 2.0 * wind) * sc, body_y - (47.0 + 10.0 * wind) * sc)
+			elbow_f = shoulder_f.lerp(hand_f, 0.48) + Vector2(facing * 3.0 * sc, -5.0 * sc)
+		else:
+			var work := clampf((progress - 0.35) / 0.65, 0.0, 1.0)
+			hand_f = Vector2(x + facing * (8.0 + 12.0 * work) * sc, body_y - (57.0 - 31.0 * work) * sc)
+			elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 3.0 * sc, -2.0 * sc)
+
 	if stun_t > 0.0:
 		hand_b = body_neck + Vector2(-facing * 17.0 * sc, 1.0 * sc)
 		elbow_b = shoulder_b.lerp(hand_b, 0.5) + Vector2(-facing * 5.0 * sc, -3.0 * sc)
@@ -1997,17 +1970,9 @@ func _draw_stick(u: Dictionary) -> void:
 		draw_colored_polygon(PackedVector2Array([head + Vector2(-11, -4) * sc, head + Vector2(-9, -12) * sc, head + Vector2(2, -15) * sc, head + Vector2(11, -8) * sc, head + Vector2(10, -2) * sc]), Color("#776b63"))
 		draw_line(head + Vector2(-7, -7) * sc, head + Vector2(6, -8) * sc, Color("#bdb1a6"), 2.0 * sc, true)
 
-	# Weapons are intentionally graphic and stylized; animations are keyed to the character's hands.
+	# Props remain in a neutral carry pose; rig, locomotion, jump and impact reactions animate.
 	_draw_weapon(kind, hand_f, facing, sc, action, progress, float(u.get("block", 0.0)))
-	if action == "slash" or action == "jump_slash":
-		var slash_alpha := sin(progress * PI)
-		if slash_alpha > 0.15:
-			var trail_color := Color(0.94, 0.88, 0.68, slash_alpha * 0.48)
-			draw_arc(Vector2(x + facing * 15.0 * sc, body_y - 34.0 * sc), 25.0 * sc, -1.15 if facing > 0.0 else -2.0, 0.70 if facing > 0.0 else 2.35, 18, trail_color, 2.4 * sc, true)
-	elif action == "slam":
-		var slam_alpha := clampf((progress - 0.6) / 0.4, 0.0, 1.0)
-		if slam_alpha > 0.0:
-			draw_arc(Vector2(x + facing * 20.0 * sc, y - 2.0), 19.0 * sc * (0.6 + slam_alpha), 0.0, TAU, 20, Color(0.91, 0.80, 0.58, 0.7 * (1.0 - slam_alpha)), 2.2 * sc, true)
+
 	if str(u.get("kind", "")) == "MINER" and float(u.get("bag", 0.0)) > 6.0:
 		var bag_r := 4.0 + float(u["bag"]) / BAG_MAX * 5.8
 		var bag_at := Vector2(x - facing * 11.0 * sc, hip.y - 1.0)
@@ -2021,76 +1986,58 @@ func _draw_stick(u: Dictionary) -> void:
 func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, action: String, progress: float, block: float) -> void:
 	var dir := facing
 	if kind == "ARCHER":
-		var bow_center := hand + Vector2(dir * 7.0 * sc, 0)
-		var top := bow_center + Vector2(0, -18.0 * sc)
-		var bottom := bow_center + Vector2(0, 18.0 * sc)
-		var bend := PackedVector2Array()
+		var center := hand + Vector2(dir * 7.0 * sc, 0)
+		var top := center + Vector2(0, -18.0 * sc)
+		var bottom := center + Vector2(0, 18.0 * sc)
+		var curve := PackedVector2Array()
 		for i in 13:
 			var t := float(i) / 12.0
-			bend.append(Vector2(bow_center.x + dir * sin(t * PI) * 8.5 * sc, lerpf(top.y, bottom.y, t)))
-		draw_polyline(bend, Color("#30251f"), 4.2 * sc, true)
-		draw_polyline(bend, Color("#c99b62"), 2.1 * sc, true)
-		var draw_amt := 0.0
-		if action == "bow_draw" or action == "bow_special":
-			draw_amt = sin(clampf((progress - 0.1) / 0.8, 0.0, 1.0) * PI * 0.5)
-		var pull := bow_center + Vector2(-dir * draw_amt * 13.0 * sc, 0)
-		draw_line(top, pull, Color("#eadfc8"), 1.3 * sc, true)
-		draw_line(pull, bottom, Color("#eadfc8"), 1.3 * sc, true)
-		if action == "bow_draw" or action == "bow_special":
-			var arrow_start := pull - Vector2(dir * 2.0 * sc, 0)
-			var arrow_end := arrow_start + Vector2(dir * 31.0 * sc, -1.0 * sc)
-			draw_line(arrow_start, arrow_end, Color("#d8c49c"), 1.8 * sc, true)
-			draw_colored_polygon(PackedVector2Array([arrow_end, arrow_end - Vector2(dir * 6.0 * sc, 2.7 * sc), arrow_end - Vector2(dir * 5.0 * sc, -2.7 * sc)]), Color("#e0e7ee"))
+			curve.append(Vector2(center.x + dir * sin(t * PI) * 8.5 * sc, lerpf(top.y, bottom.y, t)))
+		draw_polyline(curve, Color("#30251f"), 4.2 * sc, true)
+		draw_polyline(curve, Color("#c99b62"), 2.1 * sc, true)
+		draw_line(top, bottom, Color("#eadfc8"), 1.3 * sc, true)
 		return
 	if kind == "MAGE":
 		var staff_end := hand + Vector2(dir * 9.0 * sc, -29.0 * sc)
 		draw_line(hand + Vector2(-dir * 2.0 * sc, 3.0 * sc), staff_end, Color("#27202f"), 5.2 * sc, true)
 		draw_line(hand, staff_end, Color("#8a6847"), 2.7 * sc, true)
-		draw_line(hand + Vector2(0, -7.0 * sc), staff_end + Vector2(0, 5.0 * sc), Color("#c8a16a"), 1.0 * sc, true)
 		var orb := staff_end + Vector2(0, -4.5 * sc)
 		var glow := 0.72 + 0.28 * sin(tick * 8.0)
-		draw_circle(orb, (5.0 + (1.9 if action == "cast" else 0.0) * sin(progress * PI)) * sc, Color(0.35, 0.62, 1.0, 0.14 * glow))
+		draw_circle(orb, 6.0 * sc, Color(0.35, 0.62, 1.0, 0.14 * glow))
 		draw_circle(orb, 4.0 * sc, Color("#638eea"))
 		draw_circle(orb + Vector2(-1.1 * sc, -1.4 * sc), 1.65 * sc, Color("#e0edff"))
 		return
 	if kind == "MINER":
-		var p := progress
-		var angle := -1.95
+		var angle := -1.6
 		if action == "mine":
-			if p < 0.35:
-				angle = lerpf(-1.95, -2.55, p / 0.35)
+			if progress < 0.35:
+				angle = lerpf(-1.6, -2.45, progress / 0.35)
 			else:
-				angle = lerpf(-2.55, 0.62, clampf((p - 0.35) / 0.65, 0.0, 1.0))
-		var tip := hand + Vector2(dir * cos(angle), sin(angle)) * 29.0 * sc
-		draw_line(hand, tip, Color("#231b16"), 5.2 * sc, true)
-		draw_line(hand, tip, Color("#96673a"), 3.0 * sc, true)
+				angle = lerpf(-2.45, 0.5, clampf((progress - 0.35) / 0.65, 0.0, 1.0))
+		var tool_tip := hand + Vector2(dir * cos(angle), sin(angle)) * 29.0 * sc
+		draw_line(hand, tool_tip, Color("#231b16"), 5.2 * sc, true)
+		draw_line(hand, tool_tip, Color("#96673a"), 3.0 * sc, true)
 		draw_colored_polygon(PackedVector2Array([
-			tip + Vector2(-2.0 * dir, -5.0) * sc,
-			tip + Vector2(7.0 * dir, -7.0) * sc,
-			tip + Vector2(13.0 * dir, -1.0) * sc,
-			tip + Vector2(8.0 * dir, 4.0) * sc,
-			tip + Vector2(1.0 * dir, 2.0) * sc
+			tool_tip + Vector2(-2.0 * dir, -5.0) * sc,
+			tool_tip + Vector2(7.0 * dir, -7.0) * sc,
+			tool_tip + Vector2(13.0 * dir, -1.0) * sc,
+			tool_tip + Vector2(8.0 * dir, 4.0) * sc,
+			tool_tip + Vector2(1.0 * dir, 2.0) * sc
 		]), Color("#929ba4"))
-		draw_line(tip + Vector2(2.0 * dir, -3.0) * sc, tip + Vector2(10.0 * dir, -1.0) * sc, Color("#e2e7ec"), 1.2 * sc, true)
+		draw_line(tool_tip + Vector2(2.0 * dir, -3.0) * sc, tool_tip + Vector2(10.0 * dir, -1.0) * sc, Color("#e2e7ec"), 1.2 * sc, true)
 		return
 	if kind == "SPEAR":
-		var thrust := sin(progress * PI) if action == "thrust" else 0.0
-		var spear_start := hand - Vector2(dir * 3.0 * sc, 0)
-		var spear_tip := hand + Vector2(dir * (38.0 + thrust * 18.0) * sc, -7.0 * sc)
-		draw_line(spear_start, spear_tip, Color("#271f19"), 5.0 * sc, true)
-		draw_line(spear_start, spear_tip, Color("#b28c58"), 2.7 * sc, true)
-		draw_line(spear_start + Vector2(0, -0.8 * sc), spear_tip + Vector2(0, -0.8 * sc), Color("#eed2a0"), 0.9 * sc, true)
-		draw_colored_polygon(PackedVector2Array([
-			spear_tip,
-			spear_tip - Vector2(dir * 11.0 * sc, 4.5 * sc),
-			spear_tip - Vector2(dir * 8.0 * sc, -4.0 * sc)
-		]), Color("#dbe2e8"))
-		var shield := hand + Vector2(dir * (10.0 + (3.0 if block > 0.0 else 0.0)) * sc, 5.0 * sc)
+		var start := hand - Vector2(dir * 3.0 * sc, 0)
+		var spear_tip := hand + Vector2(dir * 43.0 * sc, -7.0 * sc)
+		draw_line(start, spear_tip, Color("#271f19"), 5.0 * sc, true)
+		draw_line(start, spear_tip, Color("#b28c58"), 2.7 * sc, true)
+		draw_line(start + Vector2(0, -0.8 * sc), spear_tip + Vector2(0, -0.8 * sc), Color("#eed2a0"), 0.9 * sc, true)
+		var shield := hand + Vector2(dir * 10.0 * sc, 5.0 * sc)
 		var shield_pts := PackedVector2Array([
 			shield + Vector2(-7.0 * dir, -13.0) * sc,
 			shield + Vector2(7.0 * dir, -11.0) * sc,
 			shield + Vector2(8.0 * dir, 7.0) * sc,
-			shield + Vector2(0, 14.0) * sc,
+			shield + Vector2(0, 14.0 * sc),
 			shield + Vector2(-8.0 * dir, 7.0) * sc
 		])
 		draw_colored_polygon(shield_pts, Color("#252a35"))
@@ -2098,39 +2045,28 @@ func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, action:
 			shield_pts[0] + Vector2(1.4 * dir, 2.0) * sc,
 			shield_pts[1] + Vector2(-1.4 * dir, 2.0) * sc,
 			shield_pts[2] + Vector2(-1.0 * dir, -2.0) * sc,
-			shield_pts[3] + Vector2(0, -2.0) * sc,
+			shield_pts[3] + Vector2(0, -2.0 * sc),
 			shield_pts[4] + Vector2(1.0 * dir, -2.0) * sc
 		]), Color("#9b5144"))
 		draw_line(shield + Vector2(0, -10.0 * sc), shield + Vector2(0, 9.0 * sc), GOLD, 1.6 * sc, true)
 		return
 	if kind == "GIANT":
-		var slam_p := progress if action == "slam" else 0.0
-		var club_angle := lerpf(-1.6, 0.82, clampf((slam_p - 0.35) / 0.6, 0.0, 1.0))
-		var club_tip := hand + Vector2(dir * cos(club_angle), sin(club_angle)) * 36.0 * sc
+		var club_tip := hand + Vector2(dir * 34.0 * sc, -13.0 * sc)
 		draw_line(hand, club_tip, Color("#29211d"), 10.0 * sc, true)
 		draw_line(hand, club_tip, Color("#74523d"), 6.4 * sc, true)
 		draw_circle(club_tip, 11.0 * sc, Color("#272a31"))
 		draw_circle(club_tip + Vector2(-2.0 * sc, -2.0 * sc), 8.5 * sc, Color("#8c8884"))
 		draw_circle(club_tip + Vector2(-4.0 * sc, -4.0 * sc), 2.6 * sc, Color("#c6c0b7"))
 		return
-	# Sword-like units: the hand follows an overhead wind-up into a broad animated arc.
-	var slash_angle := -1.8
-	if action == "slash" or action == "jump_slash":
-		if progress < 0.34:
-			slash_angle = lerpf(-1.8, -1.15, progress / 0.34)
-		elif progress < 0.72:
-			slash_angle = lerpf(-1.15, 0.82, (progress - 0.34) / 0.38)
-		else:
-			slash_angle = lerpf(0.82, 0.56, (progress - 0.72) / 0.28)
-	else:
-		slash_angle = -1.35 + 0.08 * sin(tick * 1.2)
-	var sword_tip := hand + Vector2(dir * cos(slash_angle), sin(slash_angle)) * 30.0 * sc
+	# Keep the hand-held prop in a simple resting angle.
+	var angle := -1.35
+	var tip := hand + Vector2(dir * cos(angle), sin(angle)) * 30.0 * sc
 	var guard_mid := hand + Vector2(dir * 3.0 * sc, -1.0 * sc)
 	var guard_a := guard_mid + Vector2(-dir * 6.0 * sc, -1.6 * sc)
 	var guard_b := guard_mid + Vector2(dir * 6.0 * sc, 1.6 * sc)
-	draw_line(hand, sword_tip, Color("#141820"), 5.1 * sc, true)
-	draw_line(hand, sword_tip, Color("#a9b8c8"), 2.8 * sc, true)
-	draw_line(hand + Vector2(0, -0.9 * sc), sword_tip + Vector2(0, -0.9 * sc), Color("#f2f5fa"), 1.0 * sc, true)
+	draw_line(hand, tip, Color("#141820"), 5.1 * sc, true)
+	draw_line(hand, tip, Color("#a9b8c8"), 2.8 * sc, true)
+	draw_line(hand + Vector2(0, -0.9 * sc), tip + Vector2(0, -0.9 * sc), Color("#f2f5fa"), 1.0 * sc, true)
 	draw_line(guard_a, guard_b, Color("#6a4b2f"), 4.2 * sc, true)
 	draw_circle(guard_mid, 2.2 * sc, GOLD)
 
@@ -2309,7 +2245,7 @@ func _draw_menu() -> void:
 		total += int(s)
 	_text("پیروزی‌ها " + str(wins) + "  ·  ستاره‌ها " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 614), 13, MUTED)
 	_text("رکورد بقا: موج " + str(best_wave) + "  ·  قهرمانی‌ها: " + str(tournament_wins), Vector2(80, 640), 12, GOLD)
-	_text("VERSION 0.7.0", Vector2(80, 684), 12, Color("#66707c"))
+	_text("VERSION 0.8.0", Vector2(80, 684), 12, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()

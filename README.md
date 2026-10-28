@@ -30,3 +30,8 @@ The APK is a debug build for testing. Landscape only. Campaign progress, surviva
 
 ## Local run
 Godot 4.5. Open `project.godot` and press F5.
+
+
+### Character rendering
+
+Version 0.8 enlarges units and adds articulated limb joints, layered shaded body shapes, class-specific silhouettes, distinct walking/running cadence, jump lift and ground shadow, mining motion, a magical focus gesture, and hit reactions. The character visuals use a stylized 2.5D drawing system in the existing side-view game; they are not full 3D Skeleton3D models.
