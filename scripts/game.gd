@@ -29,6 +29,25 @@ const STATS = GameDefinitions.STATS
 const KIND_ORDER = GameDefinitions.KIND_ORDER
 const STAGES = GameDefinitions.STAGES
 
+# Original, layered vector character art. The limbs remain procedurally rigged,
+# while the torso and head use detailed SVG assets rather than plain circles.
+const UNIT_HEAD_TEXTURES := {
+	"MINER": preload("res://assets/units/heads/miner.svg"),
+	"SWORD": preload("res://assets/units/heads/sword.svg"),
+	"ARCHER": preload("res://assets/units/heads/archer.svg"),
+	"SPEAR": preload("res://assets/units/heads/spear.svg"),
+	"MAGE": preload("res://assets/units/heads/mage.svg"),
+	"GIANT": preload("res://assets/units/heads/giant.svg"),
+}
+const UNIT_TORSO_TEXTURES := {
+	"MINER": preload("res://assets/units/torsos/miner.svg"),
+	"SWORD": preload("res://assets/units/torsos/sword.svg"),
+	"ARCHER": preload("res://assets/units/torsos/archer.svg"),
+	"SPEAR": preload("res://assets/units/torsos/spear.svg"),
+	"MAGE": preload("res://assets/units/torsos/mage.svg"),
+	"GIANT": preload("res://assets/units/torsos/giant.svg"),
+}
+
 var rng := RandomNumberGenerator.new()
 var screen := "menu"
 var paused := false
@@ -1783,19 +1802,37 @@ func _draw_stick(u: Dictionary) -> void:
 				hand = Vector2(x + facing * (8.0 + 12.0 * work) * sc, body_y - (55.0 - 29.0 * work) * sc)
 			elbow = shoulder.lerp(hand, 0.52) + Vector2(facing * 3.0 * sc, -2.0 * sc)
 
-	# رسم بدن (یک خط ضخیم و ساده)
-	draw_line(hip, neck, body_color, (8.0 if kind == "GIANT" else 5.5) * sc, true)
-	
-	# رسم دست‌ها
+	# Torso illustration is a high-resolution, layered SVG per unit class.
+	# Width differs by class so the heavy unit reads as a true heavyweight.
+	var torso_width := (38.0 if kind == "GIANT" else 29.0) * sc
+	var torso_height := 31.0 * sc
+	var torso_rect := Rect2(
+		Vector2(x - torso_width * 0.5, neck.y - 2.0 * sc),
+		Vector2(torso_width, torso_height)
+	)
+	draw_texture_rect(UNIT_TORSO_TEXTURES[kind], torso_rect, false)
+	# A restrained faction tab keeps both armies readable without repainting the whole sprite.
+	var faction_tint := BLUE if friendly else RED
+	draw_line(
+		Vector2(x - 4.5 * sc, neck.y + 13.0 * sc),
+		Vector2(x + 4.5 * sc, neck.y + 13.8 * sc),
+		faction_tint,
+		1.9 * sc,
+		true
+	)
+# رسم دست‌ها
 	draw_line(shoulder, elbow, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
 	draw_line(elbow, hand, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
 
-	# رسم سر (دایره مشکی)
-	var head_r := (10.0 if kind == "GIANT" else 8.0) * sc
-	draw_circle(head, head_r, body_color)
-	
-	# چشم بسیار ساده (برای تشخیص تیم)
-	draw_circle(head + Vector2(facing * 3.0 * sc, -1.0 * sc), 1.5 * sc, eye_color)
+	# Detailed class headgear/face is a separate SVG layer, aligned to the animated head pivot.
+	# The eye shapes, hood/helmet silhouette and material highlights are painted into each original vector asset.
+	var head_width := (34.0 if kind == "GIANT" else 28.5) * sc
+	var head_height := 33.0 * sc
+	var head_rect := Rect2(
+		Vector2(head.x - head_width * 0.5, head.y - 16.6 * sc),
+		Vector2(head_width, head_height)
+	)
+	draw_texture_rect(UNIT_HEAD_TEXTURES[kind], head_rect, false)
 
 	# افکت انتخاب شدن نیرو
 	var selected := int(u.get("id", -99)) == selected_id and friendly
