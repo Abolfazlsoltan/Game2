@@ -1605,63 +1605,63 @@ func _draw_ground() -> void:
 
 func _draw_mine() -> void:
 	var bob := sin(tick * 3.0) * 2.0
+	# پایه سنگی معدن
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(MINE_X - 54, MINE_Y + 8), Vector2(MINE_X - 20, MINE_Y - 46 + bob), Vector2(MINE_X + 8, MINE_Y - 8),
 		Vector2(MINE_X + 36, MINE_Y - 52), Vector2(MINE_X + 62, MINE_Y + 10)
 	]), Color("#5c5348"))
+	# تکه‌های طلا (زرد و درخشان)
 	draw_colored_polygon(PackedVector2Array([
 		Vector2(MINE_X - 10, MINE_Y - 8), Vector2(MINE_X + 4, MINE_Y - 28), Vector2(MINE_X + 18, MINE_Y - 6)
 	]), GOLD)
 	draw_circle(Vector2(MINE_X - 16, MINE_Y - 18 + bob), 4.0, Color("#ffe29a"))
+	draw_circle(Vector2(MINE_X + 25, MINE_Y - 15 + bob), 3.0, Color("#ffe29a"))
 	_text("GOLD", Vector2(MINE_X - 22, MINE_Y - 58), 12, GOLD)
 
 func _draw_statue(x: float, ratio: float, friendly: bool) -> void:
+	# طراحی مجسمه غول‌پیکر شبیه به استیک‌وار
 	var team := BLUE if friendly else RED
-	var stone := Color("#c8beb0")
-	var shade := Color("#6e655c")
-	var dark := Color("#3a342f")
+	var stone := Color("#888888")
+	var dark := Color("#444444")
 	var crack := clampf(1.0 - ratio, 0.0, 1.0)
-	var lean := (1.0 if friendly else -1.0) * crack * 14.0
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x - 70, 560), Vector2(x + 74, 560), Vector2(x + 48, 572), Vector2(x - 46, 572)
-	]), Color(0, 0, 0, 0.28))
-	# Low wall the garrison stands behind.
-	var wall := x + (46.0 if friendly else -62.0)
-	draw_rect(Rect2(wall, 468, 18, 92), Color("#2c343c"))
-	draw_rect(Rect2(wall - 4, 460, 26, 12), Color("#46515b"))
-	draw_rect(Rect2(x - 58, 508, 116, 52), shade)
-	draw_rect(Rect2(x - 50, 498, 100, 16), stone)
-	draw_line(Vector2(x - 50, 522), Vector2(x + 50, 522), Color("#efe6d6"), 1.5)
-	var base := Vector2(x, 500)
-	var hip := Vector2(x + lean * 0.35, 452)
-	var neck := Vector2(x + lean * 0.7, 412)
-	var head := Vector2(x + lean, 386)
-	draw_line(hip, base + Vector2(-22, 0), shade, 7.0, true)
-	draw_line(hip, base + Vector2(24, 0), stone, 7.0, true)
-	draw_line(hip, neck, shade, 9.0, true)
-	draw_line(hip, neck, stone, 5.5, true)
-	draw_line(neck, head + Vector2(-26, 6), stone, 5.0, true)
-	draw_line(neck, head + Vector2(30, -2), stone, 5.0, true)
-	draw_circle(head, 16.0, shade)
-	draw_circle(head + Vector2(-2, -2), 13.0, stone)
-	draw_arc(head, 16.0, 0, TAU, 24, team, 2.4, true)
-	draw_colored_polygon(PackedVector2Array([
-		head + Vector2(-10, -12), head + Vector2(0, -24), head + Vector2(10, -12)
-	]), team)
-	if crack > 0.18:
-		draw_line(hip + Vector2(-6, 8), neck + Vector2(8, 6), dark, 1.6, true)
-	if crack > 0.45:
-		draw_line(head + Vector2(-6, 2), head + Vector2(7, 8), dark, 1.8, true)
-		draw_line(base + Vector2(-8, -6), hip + Vector2(4, 10), dark, 1.4, true)
-	if crack > 0.72:
-		draw_line(neck + Vector2(-4, 4), hip + Vector2(16, 18), dark, 2.2, true)
-		draw_circle(base + Vector2(30, 6), 4.0, shade)
-	draw_line(Vector2(x + lean * 0.2, 348), Vector2(x + lean * 0.2, 376), Color("#a88a5d"), 3.0, true)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(x + lean * 0.2, 350), Vector2(x + lean * 0.2 + 26, 358), Vector2(x + lean * 0.2, 368)
-	]), team)
-	draw_rect(Rect2(x - 48, 574, 96, 8), Color(0, 0, 0, 0.62))
-	draw_rect(Rect2(x - 46, 576, 92.0 * clampf(ratio, 0.0, 1.0), 4), team)
+	var dir := 1.0 if friendly else -1.0
+	
+	# سایه
+	_draw_ellipse_shape(Vector2(x, 570), Vector2(60, 10), Color(0,0,0,0.3))
+	
+	# پایه
+	draw_rect(Rect2(x - 40, 550, 80, 20), dark)
+	
+	# پاها
+	draw_line(Vector2(x - 15, 550), Vector2(x - 15, 470), stone, 16.0, true)
+	draw_line(Vector2(x + 15, 550), Vector2(x + 15, 470), stone, 16.0, true)
+	
+	# بدن
+	draw_line(Vector2(x, 470), Vector2(x, 380), stone, 22.0, true)
+	
+	# بازو و شمشیر بزرگ
+	var hand := Vector2(x + dir * 20, 420)
+	var sword_tip := Vector2(x + dir * 70, 280)
+	draw_line(Vector2(x, 400), hand, stone, 14.0, true) # دست
+	draw_line(hand, sword_tip, stone.lightened(0.2), 12.0, true) # شمشیر
+	draw_line(hand + Vector2(-dir*15, 5), hand + Vector2(dir*15, -5), Color("#aaaaaa"), 6.0, true) # محافظ شمشیر
+	
+	# سر
+	draw_circle(Vector2(x, 350), 28.0, stone)
+	draw_circle(Vector2(x, 350), 24.0, Color(team.r, team.g, team.b, 0.2))
+	
+	# ترک خوردگی بر اساس سلامتی
+	if crack > 0.3:
+		draw_line(Vector2(x - 5, 400), Vector2(x + 10, 440), dark, 4.0, true)
+	if crack > 0.6:
+		draw_line(Vector2(x + 10, 350), Vector2(x - 15, 370), dark, 4.0, true)
+		draw_line(Vector2(x - 10, 470), Vector2(x + 5, 500), dark, 3.0, true)
+	if crack > 0.8:
+		draw_line(Vector2(x + 20, 300), Vector2(x + 40, 330), dark, 5.0, true)
+
+	# نوار سلامت بالای مجسمه
+	draw_rect(Rect2(x - 48, 300, 96, 8), Color(0, 0, 0, 0.62))
+	draw_rect(Rect2(x - 46, 302, 92.0 * clampf(ratio, 0.0, 1.0), 4), team)
 
 func _draw_shot(p: Dictionary) -> void:
 	var a := Vector2(float(p["x"]), float(p["y"]))
@@ -1670,7 +1670,7 @@ func _draw_shot(p: Dictionary) -> void:
 	if str(p["kind"]) == "MAGE":
 		draw_circle(a, 5.0, col)
 	else:
-		draw_line(b, a, col, 2.0, true)
+		draw_line(b, a, col, 2.5, true)
 
 func _star(c: Vector2, r: float, color: Color) -> void:
 	var pts := PackedVector2Array()
@@ -1687,869 +1687,197 @@ func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color) -> void:
 		points.append(center + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
 	draw_colored_polygon(points, color)
 
-func _draw_bone(a: Vector2, b: Vector2, width: float, color: Color) -> void:
-	var delta := b - a
-	if delta.length() < 0.5:
-		return
-	var normal := delta.orthogonal().normalized()
-	var ink := Color("#171820")
-	draw_line(a, b, ink, width + maxf(2.0, width * 0.34), true)
-	draw_line(a, b, color.darkened(0.22), width, true)
-	draw_line(a - normal * width * 0.18, b - normal * width * 0.18, color.lightened(0.28), maxf(1.0, width * 0.24), true)
-	_draw_joint(a, width * 0.44, color)
-	_draw_joint(b, width * 0.44, color)
-
-func _draw_joint(center: Vector2, radius: float, color: Color) -> void:
-	draw_circle(center, radius + 1.7, Color("#171820"))
-	draw_circle(center, radius, color.darkened(0.12))
-	draw_circle(center + Vector2(-radius * 0.25, -radius * 0.3), maxf(0.8, radius * 0.34), color.lightened(0.38))
-
-func _draw_boot(foot: Vector2, facing: float, sc: float, base: Color) -> void:
-	var sgn := 1.0 if facing >= 0.0 else -1.0
-	var pts := PackedVector2Array([
-		foot + Vector2(-4.5 * sgn, -2.6) * sc,
-		foot + Vector2(5.5 * sgn, -2.4) * sc,
-		foot + Vector2(10.0 * sgn, 1.0) * sc,
-		foot + Vector2(7.0 * sgn, 3.2) * sc,
-		foot + Vector2(-5.5 * sgn, 3.0) * sc
-	])
-	draw_colored_polygon(pts, Color("#171820"))
-	var inner := PackedVector2Array()
-	for p in pts:
-		inner.append(foot + (p - foot) * 0.78 + Vector2(0, -0.6 * sc))
-	draw_colored_polygon(inner, base)
-	draw_line(foot + Vector2(-2.0 * sgn, -1.4) * sc, foot + Vector2(5.0 * sgn, -1.4) * sc, base.lightened(0.4), maxf(1.0, sc), true)
-
-func _draw_torso(hip: Vector2, neck: Vector2, facing: float, sc: float, team: Color, kind: String) -> void:
-	var shoulder := neck + Vector2(0.0, 5.0 * sc)
-	var waist := hip - Vector2(0.0, 1.0 * sc)
-	var shoulder_w := (10.0 if kind == "GIANT" else 7.3) * sc
-	var waist_w := (8.5 if kind == "GIANT" else 5.6) * sc
-	var torso := PackedVector2Array([
-		shoulder + Vector2(-shoulder_w, -2.0 * sc),
-		shoulder + Vector2(shoulder_w, -2.0 * sc),
-		waist + Vector2(waist_w, 3.0 * sc),
-		waist + Vector2(-waist_w, 3.0 * sc)
-	])
-	var base := team.darkened(0.20)
-	if kind == "MAGE":
-		var cloak := PackedVector2Array([
-			shoulder + Vector2(-shoulder_w * 0.9, -1.0 * sc),
-			shoulder + Vector2(shoulder_w * 0.9, -1.0 * sc),
-			waist + Vector2(waist_w * 1.45, 12.0 * sc),
-			waist + Vector2(-waist_w * 1.55, 14.0 * sc)
-		])
-		draw_colored_polygon(cloak, Color("#40364f"))
-		draw_line(cloak[3], cloak[0], Color("#78649b"), 2.1 * sc, true)
-	draw_colored_polygon(torso, Color("#151820"))
-	var inner := PackedVector2Array([
-		shoulder + Vector2(-shoulder_w * 0.82, -0.5 * sc),
-		shoulder + Vector2(shoulder_w * 0.82, -0.5 * sc),
-		waist + Vector2(waist_w * 0.8, 1.0 * sc),
-		waist + Vector2(-waist_w * 0.8, 1.0 * sc)
-	])
-	draw_colored_polygon(inner, base)
-	draw_colored_polygon(PackedVector2Array([
-		shoulder + Vector2(-shoulder_w * 0.58, 1.0 * sc),
-		shoulder + Vector2(-shoulder_w * 0.05, 1.0 * sc),
-		waist + Vector2(-waist_w * 0.08, -1.0 * sc),
-		waist + Vector2(-waist_w * 0.5, 0.5 * sc)
-	]), team.lightened(0.22))
-	draw_line(shoulder + Vector2(shoulder_w * 0.62, -0.2 * sc), waist + Vector2(waist_w * 0.48, 1.5 * sc), Color("#11141b"), 1.5 * sc, true)
-	match kind:
-		"SWORD":
-			var plate := PackedVector2Array([
-				shoulder + Vector2(-4.5 * sc, 2.0 * sc),
-				shoulder + Vector2(4.0 * sc, 2.0 * sc),
-				waist + Vector2(3.7 * sc, -2.0 * sc),
-				waist + Vector2(-3.5 * sc, -2.0 * sc)
-			])
-			draw_colored_polygon(plate, Color("#8e9eae"))
-			draw_line(plate[0], plate[3], Color("#dfeaf4"), 1.7 * sc, true)
-			draw_line(shoulder + Vector2(0, 5.0 * sc), waist + Vector2(0, -4.0 * sc), Color("#5a6978"), 1.2 * sc, true)
-		"ARCHER":
-			draw_colored_polygon(PackedVector2Array([
-				shoulder + Vector2(-5.0 * sc, 1.0 * sc),
-				shoulder + Vector2(5.0 * sc, 2.0 * sc),
-				waist + Vector2(3.5 * sc, -3.0 * sc),
-				waist + Vector2(-3.0 * sc, -1.0 * sc)
-			]), Color("#916344"))
-			draw_line(shoulder + Vector2(-2.0 * sc, 3.0 * sc), waist + Vector2(1.5 * sc, -2.0 * sc), Color("#d2a16d"), 1.6 * sc, true)
-		"SPEAR":
-			draw_colored_polygon(PackedVector2Array([
-				shoulder + Vector2(-5.5 * sc, 1.0 * sc),
-				shoulder + Vector2(5.5 * sc, 1.0 * sc),
-				waist + Vector2(4.0 * sc, -2.0 * sc),
-				waist + Vector2(-4.0 * sc, -2.0 * sc)
-			]), Color("#87483f"))
-			draw_line(shoulder + Vector2(-4.5 * sc, 2.0 * sc), waist + Vector2(1.0 * sc, -2.0 * sc), GOLD, 1.4 * sc, true)
-		"MAGE":
-			draw_colored_polygon(PackedVector2Array([
-				shoulder + Vector2(-4.5 * sc, 2.0 * sc),
-				shoulder + Vector2(4.5 * sc, 2.0 * sc),
-				waist + Vector2(4.0 * sc, -1.0 * sc),
-				waist + Vector2(-4.0 * sc, -1.0 * sc)
-			]), Color("#665082"))
-			draw_circle(hip.lerp(neck, 0.46), 2.8 * sc, Color("#9ec2ff"))
-		"GIANT":
-			draw_colored_polygon(PackedVector2Array([
-				shoulder + Vector2(-8.0 * sc, 0.0),
-				shoulder + Vector2(8.0 * sc, 0.0),
-				waist + Vector2(6.0 * sc, 1.0 * sc),
-				waist + Vector2(-6.0 * sc, 1.0 * sc)
-			]), Color("#71665f"))
-			draw_line(shoulder + Vector2(-6.0 * sc, 2.0 * sc), waist + Vector2(-4.0 * sc, 0), Color("#b5aaa0"), 2.1 * sc, true)
-		"MINER":
-			draw_line(shoulder + Vector2(-4.0 * sc, 2.0 * sc), waist + Vector2(3.0 * sc, -1.0 * sc), Color("#b98a49"), 2.0 * sc, true)
-
-
-func _draw_role_armor(hip: Vector2, neck: Vector2, facing: float, sc: float, team: Color, kind: String, phase: float, moving: bool) -> void:
-	var shoulder := neck + Vector2(0.0, 5.0 * sc)
-	var waist := hip - Vector2(0.0, 1.0 * sc)
-	var mid := neck.lerp(hip, 0.49)
-	var ink := Color("#171820")
-	var accent := team.lightened(0.22)
-	var trim := Color("#e2b34a") if kind == "MINER" else accent
-
-	# Shoulder pieces and layered material highlights make each silhouette readable at battlefield scale.
-	if kind == "SWORD" or kind == "SPEAR":
-		for side_sign in [-1.0, 1.0]:
-			var pad := shoulder + Vector2(side_sign * 6.4 * sc, 1.6 * sc)
-			draw_circle(pad, 4.8 * sc, ink)
-			draw_circle(pad, 3.8 * sc, Color("#78899d") if kind == "SWORD" else Color("#9b5144"))
-			draw_circle(pad + Vector2(-0.8 * sc, -1.0 * sc), 1.5 * sc, Color("#dce6ef") if kind == "SWORD" else Color("#e9b7a0"))
-	elif kind == "ARCHER":
-		var mantle := PackedVector2Array([
-			shoulder + Vector2(-8.0 * sc, -1.0 * sc),
-			shoulder + Vector2(-1.0 * sc, -2.0 * sc),
-			shoulder + Vector2(-3.0 * sc, 5.0 * sc),
-			shoulder + Vector2(-9.0 * sc, 7.0 * sc)
-		])
-		draw_colored_polygon(mantle, ink)
-		draw_colored_polygon(PackedVector2Array([
-			mantle[0] + Vector2(1.0 * sc, 1.0 * sc),
-			mantle[1] + Vector2(-0.5 * sc, 1.0 * sc),
-			mantle[2] + Vector2(-0.5 * sc, -0.5 * sc),
-			mantle[3] + Vector2(1.0 * sc, -1.0 * sc)
-		]), Color("#a87952"))
-	elif kind == "GIANT":
-		for side_sign in [-1.0, 1.0]:
-			var pad := shoulder + Vector2(side_sign * 7.4 * sc, 1.7 * sc)
-			draw_colored_polygon(PackedVector2Array([
-				pad + Vector2(-5.2 * sc, -2.0 * sc),
-				pad + Vector2(2.0 * sc, -4.8 * sc),
-				pad + Vector2(6.0 * sc, 0.0),
-				pad + Vector2(3.5 * sc, 5.0 * sc),
-				pad + Vector2(-4.5 * sc, 4.2 * sc)
-			]), ink)
-			draw_colored_polygon(PackedVector2Array([
-				pad + Vector2(-3.6 * sc, -1.5 * sc),
-				pad + Vector2(1.6 * sc, -3.2 * sc),
-				pad + Vector2(4.4 * sc, 0.2 * sc),
-				pad + Vector2(2.5 * sc, 3.5 * sc),
-				pad + Vector2(-3.1 * sc, 3.0 * sc)
-			]), Color("#887d73"))
-			draw_line(pad + Vector2(-2.0 * sc, -1.0 * sc), pad + Vector2(2.6 * sc, 2.2 * sc), Color("#c9bfb2"), 1.25 * sc, true)
-
-	match kind:
-		"MINER":
-			var strap_a := shoulder + Vector2(-4.5 * facing * sc, 2.0 * sc)
-			var strap_b := waist + Vector2(3.6 * facing * sc, -1.0 * sc)
-			draw_line(strap_a, strap_b, ink, 4.4 * sc, true)
-			draw_line(strap_a, strap_b, Color("#bd8b43"), 2.2 * sc, true)
-			draw_line(waist + Vector2(-6.0 * sc, 0.0), waist + Vector2(6.0 * sc, 0.0), ink, 4.0 * sc, true)
-			draw_line(waist + Vector2(-5.5 * sc, -0.4 * sc), waist + Vector2(5.5 * sc, -0.4 * sc), Color("#d8b05a"), 1.4 * sc, true)
-			draw_rect(Rect2(waist + Vector2(-1.8 * sc, -2.1 * sc), Vector2(3.6 * sc, 3.4 * sc)), Color("#e7cb7a"))
-			var pouch := shoulder + Vector2(-6.7 * facing * sc, 11.0 * sc)
-			draw_rect(Rect2(pouch, Vector2(4.5 * sc, 5.2 * sc)), ink)
-			draw_rect(Rect2(pouch + Vector2(0.6 * sc, 0.6 * sc), Vector2(3.2 * sc, 3.5 * sc)), Color("#85603a"))
-		"SWORD":
-			var plate := PackedVector2Array([
-				mid + Vector2(-4.8 * sc, -7.8 * sc),
-				mid + Vector2(4.8 * sc, -7.8 * sc),
-				waist + Vector2(4.0 * sc, -0.6 * sc),
-				waist + Vector2(-4.0 * sc, -0.6 * sc)
-			])
-			draw_colored_polygon(PackedVector2Array([
-				plate[0] + Vector2(-1.0 * sc, 0.0),
-				plate[1] + Vector2(1.0 * sc, 0.0),
-				plate[2] + Vector2(1.0 * sc, 1.2 * sc),
-				plate[3] + Vector2(-1.0 * sc, 1.2 * sc)
-			]), ink)
-			draw_colored_polygon(plate, Color("#899bad"))
-			draw_colored_polygon(PackedVector2Array([
-				plate[0] + Vector2(1.3 * sc, 1.1 * sc),
-				plate[1] + Vector2(-1.3 * sc, 1.1 * sc),
-				plate[2] + Vector2(-1.0 * sc, -1.1 * sc),
-				plate[3] + Vector2(1.0 * sc, -1.1 * sc)
-			]), Color("#b9c7d4"))
-			draw_line(mid + Vector2(-3.0 * sc, -2.0 * sc), waist + Vector2(0.0, -1.6 * sc), Color("#e5edf5"), 1.15 * sc, true)
-			draw_circle(mid + Vector2(0.0, 2.0 * sc), 2.4 * sc, ink)
-			draw_circle(mid + Vector2(0.0, 2.0 * sc), 1.35 * sc, GOLD)
-		"ARCHER":
-			var vest := PackedVector2Array([
-				shoulder + Vector2(-5.6 * sc, 1.8 * sc),
-				shoulder + Vector2(4.6 * sc, 1.8 * sc),
-				waist + Vector2(4.6 * sc, -0.8 * sc),
-				waist + Vector2(-3.4 * sc, -0.8 * sc)
-			])
-			draw_colored_polygon(vest, ink)
-			draw_colored_polygon(PackedVector2Array([
-				vest[0] + Vector2(1.1 * sc, 1.2 * sc),
-				vest[1] + Vector2(-1.1 * sc, 1.2 * sc),
-				vest[2] + Vector2(-0.9 * sc, -1.0 * sc),
-				vest[3] + Vector2(1.0 * sc, -1.0 * sc)
-			]), Color("#936344"))
-			draw_line(shoulder + Vector2(-2.2 * sc, 3.0 * sc), waist + Vector2(3.0 * sc, -1.0 * sc), Color("#d0a16e"), 1.4 * sc, true)
-			draw_line(waist + Vector2(-5.0 * sc, 0.8 * sc), waist + Vector2(5.0 * sc, 0.8 * sc), ink, 3.5 * sc, true)
-			draw_circle(waist + Vector2(-facing * 3.6 * sc, 1.0 * sc), 1.5 * sc, Color("#e3c187"))
-		"SPEAR":
-			var plate := PackedVector2Array([
-				shoulder + Vector2(-5.5 * sc, 2.0 * sc),
-				shoulder + Vector2(5.5 * sc, 2.0 * sc),
-				waist + Vector2(4.0 * sc, -0.8 * sc),
-				waist + Vector2(-4.0 * sc, -0.8 * sc)
-			])
-			draw_colored_polygon(plate, ink)
-			draw_colored_polygon(PackedVector2Array([
-				plate[0] + Vector2(1.0 * sc, 1.0 * sc),
-				plate[1] + Vector2(-1.0 * sc, 1.0 * sc),
-				plate[2] + Vector2(-0.7 * sc, -1.1 * sc),
-				plate[3] + Vector2(0.7 * sc, -1.1 * sc)
-			]), Color("#9c5b50"))
-			draw_line(shoulder + Vector2(-4.3 * sc, 3.0 * sc), waist + Vector2(2.0 * sc, -1.5 * sc), Color("#e0b45a"), 1.5 * sc, true)
-			draw_circle(mid + Vector2(facing * 1.7 * sc, 2.0 * sc), 2.4 * sc, ink)
-			draw_circle(mid + Vector2(facing * 1.7 * sc, 2.0 * sc), 1.25 * sc, Color("#ebc46e"))
-			draw_line(waist + Vector2(-5.4 * sc, 0.5 * sc), waist + Vector2(5.4 * sc, 0.5 * sc), ink, 4.0 * sc, true)
-		"MAGE":
-			draw_line(shoulder + Vector2(-5.6 * sc, 2.0 * sc), waist + Vector2(-6.0 * sc, 10.0 * sc), ink, 3.2 * sc, true)
-			draw_line(shoulder + Vector2(-5.6 * sc, 2.0 * sc), waist + Vector2(-6.0 * sc, 10.0 * sc), Color("#c0a1e8"), 1.4 * sc, true)
-			draw_line(shoulder + Vector2(5.0 * sc, 2.0 * sc), waist + Vector2(6.0 * sc, 10.0 * sc), ink, 3.2 * sc, true)
-			draw_line(shoulder + Vector2(5.0 * sc, 2.0 * sc), waist + Vector2(6.0 * sc, 10.0 * sc), Color("#c0a1e8"), 1.4 * sc, true)
-			var rune := mid + Vector2(facing * 0.2 * sc, 1.0 * sc)
-			draw_circle(rune, 4.0 * sc, Color("#9ec2ff", 0.16 + 0.06 * sin(tick * 5.0)))
-			draw_arc(rune, 3.2 * sc, 0.0, TAU, 18, Color("#b4cfff"), 1.2 * sc, true)
-			draw_line(rune + Vector2(-1.7 * sc, 0.0), rune + Vector2(1.7 * sc, 0.0), Color("#e3edff"), 1.1 * sc, true)
-			draw_line(rune + Vector2(0.0, -1.7 * sc), rune + Vector2(0.0, 1.7 * sc), Color("#e3edff"), 1.1 * sc, true)
-		"GIANT":
-			var chest := PackedVector2Array([
-				shoulder + Vector2(-8.0 * sc, 2.0 * sc),
-				shoulder + Vector2(8.0 * sc, 2.0 * sc),
-				waist + Vector2(7.0 * sc, -0.5 * sc),
-				waist + Vector2(-7.0 * sc, -0.5 * sc)
-			])
-			draw_colored_polygon(chest, ink)
-			draw_colored_polygon(PackedVector2Array([
-				chest[0] + Vector2(1.2 * sc, 1.0 * sc),
-				chest[1] + Vector2(-1.2 * sc, 1.0 * sc),
-				chest[2] + Vector2(-1.3 * sc, -1.2 * sc),
-				chest[3] + Vector2(1.3 * sc, -1.2 * sc)
-			]), Color("#756b62"))
-			draw_line(shoulder + Vector2(-5.0 * sc, 4.0 * sc), waist + Vector2(5.0 * sc, -2.0 * sc), Color("#bdb1a6"), 2.0 * sc, true)
-			draw_line(waist + Vector2(-8.0 * sc, 1.0 * sc), waist + Vector2(8.0 * sc, 1.0 * sc), ink, 5.0 * sc, true)
-			draw_line(waist + Vector2(-7.0 * sc, 0.4 * sc), waist + Vector2(7.0 * sc, 0.4 * sc), Color("#bd9b5e"), 1.8 * sc, true)
-
-func _draw_headgear_accents(head: Vector2, facing: float, sc: float, kind: String, team: Color) -> void:
-	var ink := Color("#171820")
-	var trim := team.lightened(0.24)
-	match kind:
-		"MINER":
-			draw_line(head + Vector2(-5.2 * sc, -7.5 * sc), head + Vector2(5.0 * sc, -7.5 * sc), Color("#d9b15e"), 1.45 * sc, true)
-			var lamp := head + Vector2(facing * 2.4 * sc, -8.3 * sc)
-			draw_circle(lamp, 3.4 * sc, ink)
-			draw_circle(lamp, 2.35 * sc, Color("#f2ca65"))
-			draw_circle(lamp + Vector2(-0.6 * sc, -0.7 * sc), 0.85 * sc, Color("#fff5cd"))
-		"SWORD":
-			var base := head + Vector2(-1.0 * facing * sc, -10.0 * sc)
-			var plume := PackedVector2Array([
-				base + Vector2(-3.4 * facing * sc, 1.0 * sc),
-				base + Vector2(-2.8 * facing * sc, -5.5 * sc),
-				base + Vector2(1.2 * facing * sc, -12.0 * sc),
-				base + Vector2(5.1 * facing * sc, -5.0 * sc),
-				base + Vector2(3.5 * facing * sc, 1.0 * sc)
-			])
-			draw_colored_polygon(plume, ink)
-			draw_colored_polygon(PackedVector2Array([
-				plume[0] + Vector2(1.0 * facing * sc, -0.5 * sc),
-				plume[1] + Vector2(1.0 * facing * sc, -0.6 * sc),
-				plume[2] + Vector2(-0.6 * facing * sc, 0.8 * sc),
-				plume[3] + Vector2(-1.0 * facing * sc, 0.5 * sc),
-				plume[4] + Vector2(-0.7 * facing * sc, -0.4 * sc)
-			]), trim)
-			draw_line(base + Vector2(-1.5 * facing * sc, -3.0 * sc), base + Vector2(1.1 * facing * sc, -8.7 * sc), Color("#f3e4b3"), 1.0 * sc, true)
-		"ARCHER":
-			draw_line(head + Vector2(-6.0 * sc, -6.0 * sc), head + Vector2(5.5 * sc, -7.5 * sc), Color("#d7ad79"), 1.8 * sc, true)
-			draw_circle(head + Vector2(-5.0 * facing * sc, -2.0 * sc), 2.1 * sc, Color("#5e3e30"))
-			draw_circle(head + Vector2(-5.0 * facing * sc, -2.0 * sc), 1.15 * sc, Color("#c18a5b"))
-			draw_line(head + Vector2(facing * 1.0 * sc, -0.6 * sc), head + Vector2(facing * 4.5 * sc, -1.7 * sc), ink, 1.2 * sc, true)
-		"SPEAR":
-			draw_line(head + Vector2(-6.2 * sc, -7.5 * sc), head + Vector2(6.2 * sc, -7.5 * sc), ink, 2.4 * sc, true)
-			draw_line(head + Vector2(-5.5 * sc, -7.7 * sc), head + Vector2(5.5 * sc, -7.7 * sc), Color("#e3c276"), 1.2 * sc, true)
-			for crest_i in 3:
-				var crest_x := float(crest_i - 1) * 3.6 * sc
-				var feather := PackedVector2Array([
-					head + Vector2(crest_x - 1.8 * sc, -10.0 * sc),
-					head + Vector2(crest_x, -17.0 * sc + absf(float(crest_i - 1)) * 2.5 * sc),
-					head + Vector2(crest_x + 1.8 * sc, -10.0 * sc)
-				])
-				draw_colored_polygon(feather, ink)
-				draw_colored_polygon(PackedVector2Array([
-					feather[0] + Vector2(0.6 * sc, 0.4 * sc),
-					feather[1] + Vector2(0.0, 1.8 * sc),
-					feather[2] + Vector2(-0.6 * sc, 0.4 * sc)
-				]), trim)
-		"MAGE":
-			draw_line(head + Vector2(-8.0 * sc, -7.2 * sc), head + Vector2(8.0 * sc, -7.2 * sc), ink, 3.0 * sc, true)
-			draw_line(head + Vector2(-7.0 * sc, -7.8 * sc), head + Vector2(7.0 * sc, -7.8 * sc), Color("#bd9be8"), 1.65 * sc, true)
-			var gem := head + Vector2(0.0, -8.1 * sc)
-			draw_colored_polygon(PackedVector2Array([
-				gem + Vector2(0.0, -2.0 * sc),
-				gem + Vector2(1.7 * sc, 0.0),
-				gem + Vector2(0.0, 2.0 * sc),
-				gem + Vector2(-1.7 * sc, 0.0)
-			]), Color("#b8d6ff"))
-			var beard := PackedVector2Array([
-				head + Vector2(-5.0 * sc, 4.0 * sc),
-				head + Vector2(4.8 * sc, 4.0 * sc),
-				head + Vector2(3.3 * sc, 9.0 * sc),
-				head + Vector2(0.0, 13.0 * sc),
-				head + Vector2(-3.8 * sc, 8.7 * sc)
-			])
-			draw_colored_polygon(beard, ink)
-			draw_colored_polygon(PackedVector2Array([
-				beard[0] + Vector2(1.1 * sc, 0.0),
-				beard[1] + Vector2(-1.2 * sc, 0.0),
-				beard[2] + Vector2(-0.7 * sc, -0.8 * sc),
-				beard[3] + Vector2(0.0, -1.1 * sc),
-				beard[4] + Vector2(0.6 * sc, -0.5 * sc)
-			]), Color("#b0b8c8"))
-		"GIANT":
-			var brow := PackedVector2Array([
-				head + Vector2(-8.0 * sc, -4.0 * sc),
-				head + Vector2(-4.5 * sc, -10.0 * sc),
-				head + Vector2(4.6 * sc, -10.0 * sc),
-				head + Vector2(8.0 * sc, -3.5 * sc),
-				head + Vector2(5.0 * sc, -1.0 * sc),
-				head + Vector2(-5.0 * sc, -1.0 * sc)
-			])
-			draw_colored_polygon(brow, ink)
-			draw_colored_polygon(PackedVector2Array([
-				brow[0] + Vector2(1.3 * sc, 0.8 * sc),
-				brow[1] + Vector2(1.2 * sc, 0.8 * sc),
-				brow[2] + Vector2(-1.2 * sc, 0.8 * sc),
-				brow[3] + Vector2(-1.3 * sc, 0.8 * sc),
-				brow[4] + Vector2(-0.8 * sc, 0.5 * sc),
-				brow[5] + Vector2(0.8 * sc, 0.5 * sc)
-			]), Color("#958a7f"))
-			draw_line(head + Vector2(-4.0 * sc, 2.8 * sc), head + Vector2(3.5 * sc, 3.8 * sc), Color("#4c3f38"), 1.4 * sc, true)
-
-func _draw_soldier_limb(a: Vector2, b: Vector2, width: float, body: Color) -> void:
-	if a.distance_to(b) < 0.5:
-		return
-	var outline := Color("#07080a")
-	draw_line(a, b, outline, width + maxf(2.0, width * 0.30), true)
-	draw_line(a, b, body, width, true)
-	var radius := width * 0.42
-	draw_circle(a, radius + 1.0, outline)
-	draw_circle(b, radius + 1.0, outline)
-	draw_circle(a, radius * 0.78, body)
-	draw_circle(b, radius * 0.78, body)
-
+# ---------------------------------------------------------
+# بخش رسم شخصیت‌ها (کاملاً بازنویسی شده به سبک Stick War)
+# ---------------------------------------------------------
 
 func _draw_stick(u: Dictionary) -> void:
-	# Original silhouette-oriented character art: compact black forms, readable gear,
-	# and the existing animated joints/actions are preserved.
 	var kind := str(u["kind"])
-	var base_scale := float(STATS[kind]["scale"])
-	var sc := base_scale * (1.12 if kind == "GIANT" else 1.30)
+	var sc := float(STATS[kind]["scale"]) * 1.3 # مقیاس بزرگتر برای هماهنگی با بازی اصلی
 	var x := float(u["x"])
 	var y := float(u["y"])
 	var facing := float(u.get("facing", 1.0))
 	var moving := bool(u.get("moving", false))
-	var running := bool(u.get("run", false))
 	var phase := float(u.get("anim", 0.0))
 	var dead := float(u.get("dead", 0.0))
 	var action := str(u.get("action", ""))
 	var action_len := maxf(0.05, float(u.get("action_len", 0.5)))
 	var action_t := float(u.get("action_t", 0.0))
 	var progress := clampf(1.0 - action_t / action_len, 0.0, 1.0)
+	
 	var friendly := int(u["side"]) == 0
-	var team := BLUE if friendly else RED
-	var ink := Color("#101114") if friendly else Color("#211619")
-	var outline := Color("#060709")
-	var material := Color("#20232a") if friendly else Color("#342125")
-	var metal := Color("#66717e") if friendly else Color("#765357")
-	var leather := Color("#69472f") if friendly else Color("#633438")
-	var accent := Color("#e0b34d") if friendly else Color("#d25852")
-	var flash := float(u.get("flash", 0.0)) > 0.0
-	if flash:
-		ink = Color("#d8d5d1")
-		material = Color("#f2e5dc")
-		metal = Color("#f7e9df")
+	# رنگ‌بندی استیک‌وار: مشکی خالص برای خودی‌ها، قرمز تیره برای دشمنان
+	var body_color := Color("#0a0a0a") if friendly else Color("#2a0a0a") 
+	var eye_color := Color("#ffffff") if friendly else Color("#ff4444")
 
 	if dead > 0.0:
 		var fall := clampf(1.0 - dead / 0.55, 0.0, 1.0)
+		# انیمیشن افتادن روی زمین
 		var fallen_head := Vector2(x + facing * 31.0 * fall, y - 8.0 - 32.0 * (1.0 - fall))
 		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(19.0 * sc, 4.5 * sc), Color(0, 0, 0, 0.26))
-		_draw_soldier_limb(Vector2(x - facing * 10.0 * sc, y - 7.0 * sc), fallen_head, 5.0 * sc, ink)
-		draw_circle(fallen_head, 7.4 * sc, outline)
-		draw_circle(fallen_head, 6.4 * sc, ink)
-		if kind == "MINER":
-			draw_circle(Vector2(x - facing * 13.0 * sc, y - 7.0 * sc), 5.0 * sc, GOLD)
+		draw_line(Vector2(x, y - 10.0 * sc), fallen_head, body_color, 6.0 * sc, true)
+		draw_circle(fallen_head, 8.0 * sc, body_color)
 		return
 
 	var jump_lift := 0.0
 	if float(u.get("leap", 0.0)) > 0.0:
 		jump_lift = sin(clampf(1.0 - float(u["leap"]) / 0.2, 0.0, 1.0) * PI) * 26.0 * sc
+		
 	var body_y := y - jump_lift
 	var gait := sin(phase)
-	var idle_breath := 0.55 * sin(tick * 2.2 + float(u.get("id", 0)) * 0.71) if not moving else 0.0
-	var body_bob := (absf(gait) * (2.6 if running else 1.5) if moving else idle_breath) * sc
+	var body_bob := (absf(gait) * 2.0 if moving else sin(tick * 2.0 + float(u["id"])) * 0.5) * sc
+	
+	# نقاط اصلی اسکلت آدمک
 	var hip := Vector2(x, body_y - 24.0 * sc - body_bob)
-	var neck := Vector2(x - facing * gait * (1.4 if moving else 0.25) * sc, body_y - 49.0 * sc - body_bob)
-	var head := Vector2(neck.x + facing * 0.6 * sc, body_y - 62.0 * sc - body_bob)
-	var selected := int(u.get("id", -99)) == selected_id and friendly
-	if selected:
-		var pulse := 0.55 + 0.45 * sin(tick * 7.0)
-		draw_arc(Vector2(x, y + 2.0), 19.0 * sc, 0.0, TAU, 24, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.2, true)
-		_star(Vector2(x, head.y - 18.0 * sc), 7.5, GOLD)
+	var neck := Vector2(x - facing * gait * 1.5 * sc if moving else x, body_y - 48.0 * sc - body_bob)
+	var head := Vector2(neck.x + facing * 1.0 * sc, body_y - 62.0 * sc - body_bob)
 
-	# Ground shadow keeps the flat silhouette anchored to the battlefield.
+	# سایه زیر پا
 	_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(14.0 * sc, 3.8 * sc), Color(0, 0, 0, 0.30))
-	if jump_lift > 1.0:
-		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(9.0 * sc, 2.8 * sc), Color(0, 0, 0, 0.20))
 
-	var stride := (1.32 if running else 0.84) if moving else 0.0
+	# محاسبه زاویه پاها (راه رفتن)
+	var stride := (1.5 if moving else 0.0)
 	var swing := gait * stride
-	var lift_a := maxf(0.0, sin(phase)) * (8.0 if running else 5.0) * sc if moving else 0.0
-	var lift_b := maxf(0.0, -sin(phase)) * (8.0 if running else 5.0) * sc if moving else 0.0
-	var foot_a := Vector2(x + facing * (5.0 + swing * 9.0) * sc, body_y - lift_a)
-	var foot_b := Vector2(x - facing * (5.0 + swing * 9.0) * sc, body_y - lift_b)
-	var knee_a := Vector2(x + facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - lift_a * 0.4)
-	var knee_b := Vector2(x - facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - lift_b * 0.4)
+	var foot_a := Vector2(x + facing * (5.0 + swing * 9.0) * sc, body_y - maxf(0.0, sin(phase)) * 5.0 * sc)
+	var foot_b := Vector2(x - facing * (5.0 + swing * 9.0) * sc, body_y - maxf(0.0, -sin(phase)) * 5.0 * sc)
+	var knee_a := Vector2(x + facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - maxf(0.0, sin(phase)) * 2.0 * sc)
+	var knee_b := Vector2(x - facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - maxf(0.0, -sin(phase)) * 2.0 * sc)
+	
 	if jump_lift > 1.0:
 		foot_a = Vector2(x + facing * 9.0 * sc, body_y - 5.0 * sc)
 		foot_b = Vector2(x - facing * 8.0 * sc, body_y - 2.0 * sc)
 		knee_a = Vector2(x + facing * 7.0 * sc, body_y - 15.0 * sc)
 		knee_b = Vector2(x - facing * 5.0 * sc, body_y - 13.0 * sc)
-	var hip_a := hip + Vector2(facing * 3.8 * sc, 0.0)
-	var hip_b := hip - Vector2(facing * 3.8 * sc, 0.0)
-	var leg_w := (4.0 if kind == "GIANT" else 3.0) * sc
-	_draw_soldier_limb(hip_b, knee_b, leg_w, ink)
-	_draw_soldier_limb(knee_b, foot_b, (3.5 if kind == "GIANT" else 2.8) * sc, ink)
-	_draw_soldier_limb(hip_a, knee_a, leg_w, ink)
-	_draw_soldier_limb(knee_a, foot_a, (3.5 if kind == "GIANT" else 2.8) * sc, ink)
-	# Simple, pointed feet instead of bulky boots.
-	draw_line(foot_b + Vector2(-facing * 2.0 * sc, 0), foot_b + Vector2(facing * 5.0 * sc, 1.2 * sc), outline, 5.0 * sc, true)
-	draw_line(foot_b + Vector2(-facing * 2.0 * sc, 0), foot_b + Vector2(facing * 5.0 * sc, 1.2 * sc), ink, 3.1 * sc, true)
-	draw_line(foot_a + Vector2(-facing * 2.0 * sc, 0), foot_a + Vector2(facing * 5.0 * sc, 1.2 * sc), outline, 5.0 * sc, true)
-	draw_line(foot_a + Vector2(-facing * 2.0 * sc, 0), foot_a + Vector2(facing * 5.0 * sc, 1.2 * sc), ink, 3.1 * sc, true)
 
-	var hurt_t := float(u.get("hurt_t", 0.0))
-	var stun_t := float(u.get("stun", 0.0))
-	var lean := facing * (1.0 if hurt_t > 0.0 else 0.0) * clampf(hurt_t / 0.24, 0.0, 1.0) * 3.0 * sc
-	if stun_t > 0.0:
-		lean -= facing * 2.0 * sc
-	var body_hip := hip + Vector2(lean, 0.0)
-	var body_neck := neck + Vector2(lean * 1.25, 0.0)
-	var shoulder_f := body_neck + Vector2(facing * 6.8 * sc, 5.3 * sc)
-	var shoulder_b := body_neck - Vector2(facing * 6.8 * sc, -5.0 * sc)
-	var arm_swing := gait * (4.8 if running else 3.0) * sc if moving else 0.0
-	var elbow_f := shoulder_f + Vector2(facing * 6.5 * sc + arm_swing, 9.5 * sc)
-	var hand_f := shoulder_f + Vector2(facing * 10.0 * sc + arm_swing, 16.0 * sc)
-	var elbow_b := shoulder_b + Vector2(-facing * 6.4 * sc - arm_swing, 9.5 * sc)
-	var hand_b := shoulder_b + Vector2(-facing * 9.0 * sc - arm_swing, 16.0 * sc)
+	var leg_thick := (6.0 if kind == "GIANT" else 4.0) * sc
+	
+	# رسم پاها (خطوط ضخیم با لبه‌های گرد)
+	draw_line(hip, knee_b, body_color, leg_thick, true)
+	draw_line(knee_b, foot_b, body_color, leg_thick * 0.8, true)
+	draw_line(hip, knee_a, body_color, leg_thick, true)
+	draw_line(knee_a, foot_a, body_color, leg_thick * 0.8, true)
 
+	# محاسبه دست‌ها
+	var shoulder := neck + Vector2(0.0, 5.0 * sc)
+	var arm_swing := gait * 3.0 * sc if moving else 0.0
+	var elbow := shoulder + Vector2(facing * 6.0 * sc + arm_swing, 10.0 * sc)
+	var hand := shoulder + Vector2(facing * 10.0 * sc + arm_swing, 18.0 * sc)
+	
+	# تنظیم موقعیت دست‌ها بسته به نوع سلاح
 	if kind == "ARCHER":
-		hand_f = Vector2(x + facing * 16.0 * sc, body_y - 34.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(0.0, 4.0 * sc)
-		hand_b = Vector2(x - facing * 8.0 * sc, body_y - 29.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.52) + Vector2(0.0, 4.0 * sc)
-	elif kind == "MAGE":
-		hand_f = Vector2(x + facing * 11.0 * sc, body_y - 36.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 2.0 * sc, 4.0 * sc)
-		hand_b = Vector2(x - facing * 9.0 * sc, body_y - 30.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.55) + Vector2(0.0, 4.0 * sc)
-		if action == "cast":
-			hand_f = Vector2(x + facing * 11.0 * sc, body_y - (48.0 + sin(progress * PI) * 7.0) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.5) + Vector2(facing * 2.0 * sc, -2.0 * sc)
+		hand = Vector2(x + facing * 15.0 * sc, body_y - 34.0 * sc)
+		elbow = shoulder.lerp(hand, 0.55) + Vector2(0.0, 4.0 * sc)
 	elif kind == "SPEAR":
-		hand_f = Vector2(x + facing * 14.0 * sc, body_y - 27.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 4.0 * sc, 0.0)
-		hand_b = Vector2(x - facing * 8.0 * sc, body_y - 34.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.55) + Vector2(-facing * 2.0 * sc, 2.0 * sc)
+		hand = Vector2(x + facing * 12.0 * sc, body_y - 28.0 * sc)
+		elbow = shoulder.lerp(hand, 0.52) + Vector2(facing * 4.0 * sc, 0.0)
 	elif kind == "GIANT":
-		hand_f = Vector2(x + facing * 13.0 * sc, body_y - 30.0 * sc)
-		elbow_f = shoulder_f.lerp(hand_f, 0.55) + Vector2(facing * 4.0 * sc, 2.0 * sc)
-	elif action == "mine":
-		if progress < 0.35:
-			var wind := clampf(progress / 0.35, 0.0, 1.0)
-			hand_f = Vector2(x + facing * (5.0 + 2.0 * wind) * sc, body_y - (46.0 + 10.0 * wind) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.48) + Vector2(facing * 3.0 * sc, -5.0 * sc)
-		else:
-			var work := clampf((progress - 0.35) / 0.65, 0.0, 1.0)
-			hand_f = Vector2(x + facing * (8.0 + 12.0 * work) * sc, body_y - (55.0 - 29.0 * work) * sc)
-			elbow_f = shoulder_f.lerp(hand_f, 0.52) + Vector2(facing * 3.0 * sc, -2.0 * sc)
+		hand = Vector2(x + facing * 13.0 * sc, body_y - 30.0 * sc)
+		elbow = shoulder.lerp(hand, 0.55) + Vector2(facing * 4.0 * sc, 2.0 * sc)
+	elif kind == "MINER":
+		if action == "mine":
+			if progress < 0.35:
+				var wind := clampf(progress / 0.35, 0.0, 1.0)
+				hand = Vector2(x + facing * (5.0 + 2.0 * wind) * sc, body_y - (46.0 + 10.0 * wind) * sc)
+			else:
+				var work := clampf((progress - 0.35) / 0.65, 0.0, 1.0)
+				hand = Vector2(x + facing * (8.0 + 12.0 * work) * sc, body_y - (55.0 - 29.0 * work) * sc)
+			elbow = shoulder.lerp(hand, 0.52) + Vector2(facing * 3.0 * sc, -2.0 * sc)
 
-	if stun_t > 0.0:
-		hand_b = body_neck + Vector2(-facing * 16.0 * sc, 1.0 * sc)
-		elbow_b = shoulder_b.lerp(hand_b, 0.5) + Vector2(-facing * 5.0 * sc, -3.0 * sc)
+	# رسم بدن (یک خط ضخیم و ساده)
+	draw_line(hip, neck, body_color, (8.0 if kind == "GIANT" else 5.5) * sc, true)
+	
+	# رسم دست‌ها
+	draw_line(shoulder, elbow, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
+	draw_line(elbow, hand, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
 
-	# A mage's loose cloak and an archer's quiver sit behind the torso.
-	if kind == "MAGE":
-		draw_colored_polygon(PackedVector2Array([
-			body_neck + Vector2(-8.0 * sc, 1.0 * sc),
-			body_neck + Vector2(7.0 * sc, 1.0 * sc),
-			body_hip + Vector2(12.0 * sc, 16.0 * sc),
-			body_hip + Vector2(-11.0 * sc, 17.0 * sc)
-		]), outline)
-		draw_colored_polygon(PackedVector2Array([
-			body_neck + Vector2(-6.5 * sc, 2.0 * sc),
-			body_neck + Vector2(5.5 * sc, 2.0 * sc),
-			body_hip + Vector2(9.5 * sc, 13.0 * sc),
-			body_hip + Vector2(-8.5 * sc, 14.0 * sc)
-		]), Color("#342c42") if friendly else Color("#47252d"))
-	if kind == "ARCHER":
-		var quiver := body_neck + Vector2(-facing * 7.0 * sc, 7.0 * sc)
-		draw_line(quiver + Vector2(-2.5 * sc, -4.0 * sc), quiver + Vector2(-1.0 * sc, 13.0 * sc), outline, 5.5 * sc, true)
-		draw_line(quiver + Vector2(-2.5 * sc, -4.0 * sc), quiver + Vector2(-1.0 * sc, 13.0 * sc), leather, 3.5 * sc, true)
-		for arrow_i in 3:
-			var ax := quiver.x + (-4.0 + float(arrow_i) * 2.5) * sc
-			draw_line(Vector2(ax, quiver.y - 8.0 * sc), Vector2(ax + 1.0 * sc, quiver.y + 2.0 * sc), outline, 1.8 * sc, true)
-			draw_line(Vector2(ax, quiver.y - 8.0 * sc), Vector2(ax + 1.0 * sc, quiver.y + 2.0 * sc), GOLD, 0.7 * sc, true)
+	# رسم سر (دایره مشکی)
+	var head_r := (10.0 if kind == "GIANT" else 8.0) * sc
+	draw_circle(head, head_r, body_color)
+	
+	# چشم بسیار ساده (برای تشخیص تیم)
+	draw_circle(head + Vector2(facing * 3.0 * sc, -1.0 * sc), 1.5 * sc, eye_color)
 
-	# Thin, tapering torso: an intentional side-view stick silhouette.
-	draw_line(body_hip, body_neck, outline, 8.8 * sc, true)
-	draw_line(body_hip, body_neck, ink, 6.4 * sc, true)
-	var torso_outer := PackedVector2Array([
-		body_neck + Vector2(-8.0 * sc, 0.0),
-		body_neck + Vector2(8.0 * sc, 0.0),
-		body_hip + Vector2(5.8 * sc, 2.0 * sc),
-		body_hip + Vector2(-5.8 * sc, 2.0 * sc)
-	])
-	draw_colored_polygon(torso_outer, outline)
-	draw_colored_polygon(PackedVector2Array([
-		body_neck + Vector2(-6.4 * sc, 1.2 * sc),
-		body_neck + Vector2(6.4 * sc, 1.2 * sc),
-		body_hip + Vector2(4.4 * sc, 1.0 * sc),
-		body_hip + Vector2(-4.4 * sc, 1.0 * sc)
-	]), ink)
+	# افکت انتخاب شدن نیرو
+	var selected := int(u.get("id", -99)) == selected_id and friendly
+	if selected:
+		var pulse := 0.5 + 0.5 * sin(tick * 7.0)
+		draw_arc(Vector2(x, y + 2.0), 20.0 * sc, 0.0, TAU, 24, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.5, true)
+		_star(Vector2(x, head.y - 18.0 * sc), 7.5, GOLD)
 
-	# Role equipment is deliberately graphic and recognizable at mobile battlefield scale.
-	match kind:
-		"MINER":
-			draw_line(body_neck + Vector2(-facing * 5.0 * sc, 4.0 * sc), body_hip + Vector2(facing * 4.0 * sc, -1.0 * sc), outline, 4.5 * sc, true)
-			draw_line(body_neck + Vector2(-facing * 5.0 * sc, 4.0 * sc), body_hip + Vector2(facing * 4.0 * sc, -1.0 * sc), leather, 2.2 * sc, true)
-			draw_line(body_hip + Vector2(-5.0 * sc, 0.0), body_hip + Vector2(5.0 * sc, 0.0), outline, 3.8 * sc, true)
-			draw_line(body_hip + Vector2(-4.5 * sc, -0.4 * sc), body_hip + Vector2(4.5 * sc, -0.4 * sc), GOLD, 1.2 * sc, true)
-		"SWORD":
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-7.0 * sc, 3.0 * sc),
-				body_neck + Vector2(7.0 * sc, 3.0 * sc),
-				body_hip + Vector2(4.0 * sc, -1.0 * sc),
-				body_hip + Vector2(-4.0 * sc, -1.0 * sc)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-5.6 * sc, 4.0 * sc),
-				body_neck + Vector2(5.6 * sc, 4.0 * sc),
-				body_hip + Vector2(2.8 * sc, -1.5 * sc),
-				body_hip + Vector2(-2.8 * sc, -1.5 * sc)
-			]), metal)
-			draw_line(body_neck + Vector2(-2.0 * sc, 5.0 * sc), body_hip + Vector2(0.0, -1.0 * sc), Color("#c5cbd1"), 1.2 * sc, true)
-			for shoulder_sign in [-1.0, 1.0]:
-				var pad := body_neck + Vector2(shoulder_sign * 7.0 * sc, 4.0 * sc)
-				draw_circle(pad, 3.1 * sc, outline)
-				draw_circle(pad, 2.3 * sc, metal)
-		"ARCHER":
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-5.5 * sc, 2.0 * sc),
-				body_neck + Vector2(5.0 * sc, 2.0 * sc),
-				body_hip + Vector2(3.5 * sc, 0.0),
-				body_hip + Vector2(-4.0 * sc, 0.0)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-4.2 * sc, 3.0 * sc),
-				body_neck + Vector2(3.8 * sc, 3.0 * sc),
-				body_hip + Vector2(2.5 * sc, 0.0),
-				body_hip + Vector2(-3.0 * sc, 0.0)
-			]), leather)
-			draw_line(body_neck + Vector2(-1.0 * sc, 3.0 * sc), body_hip + Vector2(2.0 * sc, 0.0), Color("#c99a65"), 1.1 * sc, true)
-		"SPEAR":
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-7.0 * sc, 3.0 * sc),
-				body_neck + Vector2(7.0 * sc, 3.0 * sc),
-				body_hip + Vector2(4.0 * sc, 0.0),
-				body_hip + Vector2(-4.0 * sc, 0.0)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-5.5 * sc, 4.0 * sc),
-				body_neck + Vector2(5.5 * sc, 4.0 * sc),
-				body_hip + Vector2(2.7 * sc, 0.0),
-				body_hip + Vector2(-2.7 * sc, 0.0)
-			]), Color("#853e3a") if not friendly else Color("#555f6b"))
-			draw_line(body_neck + Vector2(-3.0 * sc, 4.0 * sc), body_hip + Vector2(2.0 * sc, 0.0), accent, 1.3 * sc, true)
-		"MAGE":
-			draw_line(body_neck + Vector2(-4.5 * sc, 4.0 * sc), body_hip + Vector2(4.5 * sc, 4.0 * sc), outline, 3.0 * sc, true)
-			draw_line(body_neck + Vector2(-4.0 * sc, 4.0 * sc), body_hip + Vector2(4.0 * sc, 4.0 * sc), Color("#8c76b2"), 1.25 * sc, true)
-			draw_circle(body_hip.lerp(body_neck, 0.48), 2.3 * sc, Color("#9ec2ff"))
-		"GIANT":
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-12.0 * sc, 1.0 * sc),
-				body_neck + Vector2(12.0 * sc, 1.0 * sc),
-				body_hip + Vector2(9.0 * sc, 2.0 * sc),
-				body_hip + Vector2(-9.0 * sc, 2.0 * sc)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				body_neck + Vector2(-10.0 * sc, 2.0 * sc),
-				body_neck + Vector2(10.0 * sc, 2.0 * sc),
-				body_hip + Vector2(7.0 * sc, 0.0),
-				body_hip + Vector2(-7.0 * sc, 0.0)
-			]), Color("#57504c") if friendly else Color("#56363b"))
-			draw_line(body_neck + Vector2(-7.0 * sc, 3.0 * sc), body_hip + Vector2(5.0 * sc, 0.0), Color("#999087"), 1.5 * sc, true)
+	# رسم سلاح (بسیار بزرگ و متمایز)
+	_draw_weapon_silhouette(kind, hand, facing, sc, action, progress, body_color)
 
-	# Back arm first, with visible elbow and hand joints; front arm is drawn over armor.
-	var arm_w := (5.2 if kind == "GIANT" else 3.6) * sc
-	_draw_soldier_limb(shoulder_b, elbow_b, arm_w, ink)
-	_draw_soldier_limb(elbow_b, hand_b, arm_w * 0.86, ink)
-	_draw_soldier_limb(shoulder_f, elbow_f, arm_w, ink)
-	_draw_soldier_limb(elbow_f, hand_f, arm_w * 0.86, ink)
-	draw_circle(hand_b, 2.5 * sc, outline)
-	draw_circle(hand_f, 2.8 * sc, outline)
-
-	# Round, faceless heads keep the classic stick-war readability. Helmets/hoods
-	# are original class markers rather than copied game sprites.
-	var head_r := (10.0 if kind == "GIANT" else 7.8) * sc
-	draw_circle(head, head_r + 1.3 * sc, outline)
-	draw_circle(head, head_r, ink)
-	draw_arc(head + Vector2(-1.0 * sc, -1.0 * sc), head_r * 0.78, PI * 1.05, PI * 1.85, 12, material, 1.0 * sc, true)
-
-	match kind:
-		"MINER":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-8.5 * sc, -2.0 * sc),
-				head + Vector2(-6.5 * sc, -9.0 * sc),
-				head + Vector2(4.5 * sc, -9.5 * sc),
-				head + Vector2(8.5 * sc, -2.0 * sc),
-				head + Vector2(7.5 * sc, 0.0)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-6.5 * sc, -3.0 * sc),
-				head + Vector2(-4.8 * sc, -7.8 * sc),
-				head + Vector2(3.8 * sc, -8.0 * sc),
-				head + Vector2(6.6 * sc, -3.0 * sc)
-			]), Color("#686e73") if friendly else Color("#754b4d"))
-			draw_line(head + Vector2(-5.0 * sc, -7.2 * sc), head + Vector2(5.0 * sc, -7.2 * sc), GOLD, 1.5 * sc, true)
-			draw_circle(head + Vector2(facing * 2.5 * sc, -7.0 * sc), 2.5 * sc, GOLD)
-			draw_circle(head + Vector2(facing * 2.5 * sc, -7.0 * sc), 1.0 * sc, Color("#fff1bd"))
-		"SWORD":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-8.5 * sc, -1.0 * sc),
-				head + Vector2(-6.5 * sc, -9.0 * sc),
-				head + Vector2(1.0 * sc, -13.5 * sc),
-				head + Vector2(8.0 * sc, -6.0 * sc),
-				head + Vector2(7.0 * sc, 0.0)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-6.6 * sc, -2.0 * sc),
-				head + Vector2(-4.8 * sc, -8.2 * sc),
-				head + Vector2(1.0 * sc, -11.0 * sc),
-				head + Vector2(6.0 * sc, -5.0 * sc),
-				head + Vector2(5.8 * sc, -1.0 * sc)
-			]), metal)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-2.0 * sc, -11.0 * sc),
-				head + Vector2(1.0 * sc, -16.0 * sc),
-				head + Vector2(4.0 * sc, -10.0 * sc)
-			]), accent)
-		"ARCHER":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-9.0 * sc, 1.0 * sc),
-				head + Vector2(-7.0 * sc, -8.0 * sc),
-				head + Vector2(0.0, -13.0 * sc),
-				head + Vector2(7.0 * sc, -9.0 * sc),
-				head + Vector2(10.0 * sc, -1.0 * sc),
-				head + Vector2(5.0 * sc, 1.0 * sc)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-6.8 * sc, 0.0),
-				head + Vector2(-5.2 * sc, -7.2 * sc),
-				head + Vector2(0.0, -10.5 * sc),
-				head + Vector2(5.2 * sc, -7.0 * sc),
-				head + Vector2(7.5 * sc, -1.5 * sc)
-			]), leather)
-			draw_line(head + Vector2(-5.0 * sc, -5.8 * sc), head + Vector2(4.0 * sc, -7.2 * sc), Color("#d3a16e"), 1.2 * sc, true)
-		"SPEAR":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-9.0 * sc, -1.0 * sc),
-				head + Vector2(-6.5 * sc, -9.5 * sc),
-				head + Vector2(0.0, -13.0 * sc),
-				head + Vector2(8.0 * sc, -7.0 * sc),
-				head + Vector2(7.5 * sc, 0.0)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-6.8 * sc, -2.0 * sc),
-				head + Vector2(-4.8 * sc, -8.2 * sc),
-				head + Vector2(0.0, -10.8 * sc),
-				head + Vector2(6.0 * sc, -5.5 * sc),
-				head + Vector2(5.8 * sc, -1.0 * sc)
-			]), metal)
-			draw_line(head + Vector2(-4.0 * sc, -7.5 * sc), head + Vector2(3.5 * sc, -9.0 * sc), accent, 1.2 * sc, true)
-		"MAGE":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-12.0 * sc, -1.0 * sc),
-				head + Vector2(-9.5 * sc, -8.0 * sc),
-				head + Vector2(0.0, -21.0 * sc),
-				head + Vector2(10.5 * sc, -8.0 * sc),
-				head + Vector2(12.0 * sc, -1.0 * sc),
-				head + Vector2(7.0 * sc, 1.0 * sc)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-9.0 * sc, -2.0 * sc),
-				head + Vector2(-7.0 * sc, -8.0 * sc),
-				head + Vector2(0.0, -17.5 * sc),
-				head + Vector2(7.0 * sc, -8.0 * sc),
-				head + Vector2(9.0 * sc, -2.0 * sc)
-			]), Color("#493b60") if friendly else Color("#63313d"))
-			var rune_glow := 0.72 + 0.28 * sin(tick * 7.0)
-			draw_circle(head + Vector2(0.0, -8.0 * sc), 2.8 * sc, Color(0.45, 0.68, 1.0, 0.35 * rune_glow))
-			draw_circle(head + Vector2(0.0, -8.0 * sc), 1.2 * sc, Color("#d8e7ff"))
-		"GIANT":
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-11.0 * sc, -3.0 * sc),
-				head + Vector2(-8.0 * sc, -11.0 * sc),
-				head + Vector2(-2.0 * sc, -14.0 * sc),
-				head + Vector2(7.0 * sc, -11.0 * sc),
-				head + Vector2(11.0 * sc, -4.0 * sc),
-				head + Vector2(8.0 * sc, 1.0 * sc)
-			]), outline)
-			draw_colored_polygon(PackedVector2Array([
-				head + Vector2(-8.5 * sc, -3.0 * sc),
-				head + Vector2(-6.2 * sc, -9.0 * sc),
-				head + Vector2(-1.5 * sc, -11.5 * sc),
-				head + Vector2(5.5 * sc, -9.5 * sc),
-				head + Vector2(8.0 * sc, -3.0 * sc)
-			]), Color("#6d6660") if friendly else Color("#744347"))
-			draw_line(head + Vector2(-6.0 * sc, -4.0 * sc), head + Vector2(5.5 * sc, -5.0 * sc), Color("#aca39a"), 1.7 * sc, true)
-
-	# Miner backpack/sack, with a gold core that reads clearly beside the dark body.
-	if kind == "MINER":
-		var sack := hip + Vector2(-facing * 10.0 * sc, -1.0 * sc)
-		draw_colored_polygon(PackedVector2Array([
-			sack + Vector2(-5.0 * sc, -4.0 * sc),
-			sack + Vector2(1.0 * sc, -6.0 * sc),
-			sack + Vector2(7.0 * sc, -2.0 * sc),
-			sack + Vector2(7.0 * sc, 5.0 * sc),
-			sack + Vector2(-1.0 * sc, 7.0 * sc),
-			sack + Vector2(-6.0 * sc, 2.0 * sc)
-		]), outline)
-		draw_colored_polygon(PackedVector2Array([
-			sack + Vector2(-3.0 * sc, -2.0 * sc),
-			sack + Vector2(1.0 * sc, -3.0 * sc),
-			sack + Vector2(4.5 * sc, 0.0),
-			sack + Vector2(4.0 * sc, 3.5 * sc),
-			sack + Vector2(-1.0 * sc, 4.0 * sc),
-			sack + Vector2(-3.5 * sc, 1.0 * sc)
-		]), Color("#8a642f"))
-		if float(u.get("bag", 0.0)) > 6.0:
-			var bag_r := 2.0 + float(u["bag"]) / BAG_MAX * 4.0
-			draw_circle(sack + Vector2(0.0, 0.0), bag_r * sc, GOLD)
-			draw_circle(sack + Vector2(-1.0 * sc, -1.0 * sc), bag_r * 0.42 * sc, Color("#fff0a6"))
-
-	# Existing weapon renderers retain functional pickaxe, sword, bow, spear/shield,
-	# mage staff, and giant club with action-aware mining and spell poses.
-	_draw_weapon(kind, hand_f, facing, sc, action, progress, float(u.get("block", 0.0)))
-
+	# نوار سلامتی بالای سر
 	if dead <= 0.0 and (float(u.get("hp", 1.0)) < float(u.get("max_hp", 1.0)) or selected):
 		var ratio := clampf(float(u.get("hp", 1.0)) / maxf(1.0, float(u.get("max_hp", 1.0))), 0.0, 1.0)
 		draw_rect(Rect2(x - 20.0 * sc, head.y - 19.0 * sc, 40.0 * sc, 4.0 * sc), Color(0, 0, 0, 0.72))
 		draw_rect(Rect2(x - 19.0 * sc, head.y - 18.5 * sc, 38.0 * sc * ratio, 2.6 * sc), GREEN if friendly else RED)
 
-func _draw_weapon(kind: String, hand: Vector2, facing: float, sc: float, action: String, progress: float, block: float) -> void:
+func _draw_weapon_silhouette(kind: String, hand: Vector2, facing: float, sc: float, action: String, progress: float, color: Color) -> void:
 	var dir := facing
+	
 	if kind == "ARCHER":
-		var center := hand + Vector2(dir * 7.0 * sc, 0)
-		var top := center + Vector2(0, -18.0 * sc)
-		var bottom := center + Vector2(0, 18.0 * sc)
-		var curve := PackedVector2Array()
-		for i in 13:
-			var t := float(i) / 12.0
-			curve.append(Vector2(center.x + dir * sin(t * PI) * 8.5 * sc, lerpf(top.y, bottom.y, t)))
-		draw_polyline(curve, Color("#30251f"), 4.2 * sc, true)
-		draw_polyline(curve, Color("#c99b62"), 2.1 * sc, true)
-		draw_line(top, bottom, Color("#eadfc8"), 1.3 * sc, true)
-		return
-	if kind == "MAGE":
-		var staff_end := hand + Vector2(dir * 9.0 * sc, -29.0 * sc)
-		draw_line(hand + Vector2(-dir * 2.0 * sc, 3.0 * sc), staff_end, Color("#27202f"), 5.2 * sc, true)
-		draw_line(hand, staff_end, Color("#8a6847"), 2.7 * sc, true)
-		var orb := staff_end + Vector2(0, -4.5 * sc)
-		var glow := 0.72 + 0.28 * sin(tick * 8.0)
-		draw_circle(orb, 6.0 * sc, Color(0.35, 0.62, 1.0, 0.14 * glow))
-		draw_circle(orb, 4.0 * sc, Color("#638eea"))
-		draw_circle(orb + Vector2(-1.1 * sc, -1.4 * sc), 1.65 * sc, Color("#e0edff"))
-		return
-	if kind == "MINER":
+		# کمان کلاسیک Stick War
+		var bow_center := hand + Vector2(dir * 5.0 * sc, 0)
+		var top := bow_center + Vector2(0, -22.0 * sc)
+		var bottom := bow_center + Vector2(0, 22.0 * sc)
+		draw_line(top, bow_center + Vector2(dir * 8.0 * sc, 0), color, 3.5 * sc, true)
+		draw_line(bow_center + Vector2(dir * 8.0 * sc, 0), bottom, color, 3.5 * sc, true)
+		# رشته کمان (خاکستری)
+		draw_line(top, bottom, Color("#aaaaaa"), 1.5 * sc, true)
+		
+	elif kind == "MINER":
+		# کلنگ معدن
 		var angle := -1.6
 		if action == "mine":
 			if progress < 0.35:
 				angle = lerpf(-1.6, -2.45, progress / 0.35)
 			else:
 				angle = lerpf(-2.45, 0.5, clampf((progress - 0.35) / 0.65, 0.0, 1.0))
-		var tool_tip := hand + Vector2(dir * cos(angle), sin(angle)) * 29.0 * sc
-		draw_line(hand, tool_tip, Color("#231b16"), 5.2 * sc, true)
-		draw_line(hand, tool_tip, Color("#96673a"), 3.0 * sc, true)
-		draw_colored_polygon(PackedVector2Array([
-			tool_tip + Vector2(-2.0 * dir, -5.0) * sc,
-			tool_tip + Vector2(7.0 * dir, -7.0) * sc,
-			tool_tip + Vector2(13.0 * dir, -1.0) * sc,
-			tool_tip + Vector2(8.0 * dir, 4.0) * sc,
-			tool_tip + Vector2(1.0 * dir, 2.0) * sc
-		]), Color("#929ba4"))
-		draw_line(tool_tip + Vector2(2.0 * dir, -3.0) * sc, tool_tip + Vector2(10.0 * dir, -1.0) * sc, Color("#e2e7ec"), 1.2 * sc, true)
-		return
-	if kind == "SPEAR":
-		var start := hand - Vector2(dir * 3.0 * sc, 0)
-		var spear_tip := hand + Vector2(dir * 43.0 * sc, -7.0 * sc)
-		draw_line(start, spear_tip, Color("#271f19"), 5.0 * sc, true)
-		draw_line(start, spear_tip, Color("#b28c58"), 2.7 * sc, true)
-		draw_line(start + Vector2(0, -0.8 * sc), spear_tip + Vector2(0, -0.8 * sc), Color("#eed2a0"), 0.9 * sc, true)
-		var shield := hand + Vector2(dir * 10.0 * sc, 5.0 * sc)
+		var tool_tip := hand + Vector2(dir * cos(angle), sin(angle)) * 28.0 * sc
+		draw_line(hand, tool_tip, Color("#4a3525"), 4.0 * sc, true) # چوب
+		# تیغه کلنگ
+		var p1 := tool_tip + Vector2(-4.0 * dir, -8.0) * sc
+		var p2 := tool_tip + Vector2(12.0 * dir, 2.0) * sc
+		draw_line(p1, p2, Color("#778899"), 4.5 * sc, true)
+		
+	elif kind == "SPEAR":
+		# نیزه و سپر سنگین (Spearton)
+		var start := hand - Vector2(dir * 10.0 * sc, 0)
+		var spear_tip := hand + Vector2(dir * 55.0 * sc, -5.0 * sc)
+		draw_line(start, spear_tip, Color("#6b4c3a"), 3.0 * sc, true)
+		# نوک نیزه (نقره‌ای)
+		draw_line(spear_tip, spear_tip - Vector2(dir * 12.0 * sc, -4.0 * sc), Color("#aeb9c4"), 4.0 * sc, true)
+		# سپر بزرگ
+		var shield := hand + Vector2(dir * 10.0 * sc, 6.0 * sc)
 		var shield_pts := PackedVector2Array([
-			shield + Vector2(-7.0 * dir, -13.0) * sc,
-			shield + Vector2(7.0 * dir, -11.0) * sc,
-			shield + Vector2(8.0 * dir, 7.0) * sc,
-			shield + Vector2(0, 14.0 * sc),
-			shield + Vector2(-8.0 * dir, 7.0) * sc
+			shield + Vector2(-12.0 * dir, -18.0) * sc,
+			shield + Vector2(12.0 * dir, -18.0) * sc,
+			shield + Vector2(15.0 * dir, 12.0) * sc,
+			shield + Vector2(0, 22.0 * sc),
+			shield + Vector2(-15.0 * dir, 12.0) * sc
 		])
-		draw_colored_polygon(shield_pts, Color("#252a35"))
-		draw_colored_polygon(PackedVector2Array([
-			shield_pts[0] + Vector2(1.4 * dir, 2.0) * sc,
-			shield_pts[1] + Vector2(-1.4 * dir, 2.0) * sc,
-			shield_pts[2] + Vector2(-1.0 * dir, -2.0) * sc,
-			shield_pts[3] + Vector2(0, -2.0 * sc),
-			shield_pts[4] + Vector2(1.0 * dir, -2.0) * sc
-		]), Color("#9b5144"))
-		draw_line(shield + Vector2(0, -10.0 * sc), shield + Vector2(0, 9.0 * sc), GOLD, 1.6 * sc, true)
-		return
-	if kind == "GIANT":
-		var club_tip := hand + Vector2(dir * 34.0 * sc, -13.0 * sc)
-		draw_line(hand, club_tip, Color("#29211d"), 10.0 * sc, true)
-		draw_line(hand, club_tip, Color("#74523d"), 6.4 * sc, true)
-		draw_circle(club_tip, 11.0 * sc, Color("#272a31"))
-		draw_circle(club_tip + Vector2(-2.0 * sc, -2.0 * sc), 8.5 * sc, Color("#8c8884"))
-		draw_circle(club_tip + Vector2(-4.0 * sc, -4.0 * sc), 2.6 * sc, Color("#c6c0b7"))
-		return
-	# Keep the hand-held prop in a simple resting angle.
-	var angle := -1.35
-	var tip := hand + Vector2(dir * cos(angle), sin(angle)) * 30.0 * sc
-	var guard_mid := hand + Vector2(dir * 3.0 * sc, -1.0 * sc)
-	var guard_a := guard_mid + Vector2(-dir * 6.0 * sc, -1.6 * sc)
-	var guard_b := guard_mid + Vector2(dir * 6.0 * sc, 1.6 * sc)
-	draw_line(hand, tip, Color("#141820"), 5.1 * sc, true)
-	draw_line(hand, tip, Color("#a9b8c8"), 2.8 * sc, true)
-	draw_line(hand + Vector2(0, -0.9 * sc), tip + Vector2(0, -0.9 * sc), Color("#f2f5fa"), 1.0 * sc, true)
-	draw_line(guard_a, guard_b, Color("#6a4b2f"), 4.2 * sc, true)
-	draw_circle(guard_mid, 2.2 * sc, GOLD)
+		draw_colored_polygon(shield_pts, color)
+		draw_polyline(shield_pts, Color("#555555"), 2.0 * sc, true)
+		
+	elif kind == "GIANT":
+		# چماق غول
+		var club_tip := hand + Vector2(dir * 45.0 * sc, -18.0 * sc)
+		draw_line(hand, club_tip, color, 14.0 * sc, true)
+		draw_circle(club_tip, 16.0 * sc, color)
+		draw_circle(club_tip + Vector2(-3.0 * sc, -3.0 * sc), 11.0 * sc, color.lightened(0.2))
+		
+	else: # SWORD (شمشیرزن)
+		var tip := hand + Vector2(dir * 40.0 * sc, -18.0 * sc)
+		# شمشیر (تیغه نقره‌ای)
+		draw_line(hand, tip, Color("#e0e0e0"), 4.0 * sc, true)
+		# دسته شمشیر
+		var guard := hand + Vector2(dir * 6.0 * sc, -2.0 * sc)
+		draw_line(guard + Vector2(-dir * 6.0 * sc, -3.0 * sc), guard + Vector2(dir * 6.0 * sc, 3.0 * sc), Color("#8b7355"), 3.5 * sc, true)
+
+# ---------------------------------------------------------
+# توابع رابط کاربری
+# ---------------------------------------------------------
 
 func _stage_name_fa(index: int) -> String:
 	var names := ["راه غبارآلود", "درهٔ کمان", "صف نیزه‌ها", "محفل خاکستر", "راه سنگی", "دو پرچم", "سپاه شب", "تاج چوبین", "گذرگاه آهنین", "خزانهٔ طوفان", "ارگ فروپاشیده", "آخرین مشعل"]
