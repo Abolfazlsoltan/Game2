@@ -35,8 +35,3 @@ Godot 4.5. Open `project.godot` and press F5.
 ### Character rendering
 
 Version 0.8 enlarges units and adds articulated limb joints, layered shaded body shapes, class-specific silhouettes, distinct walking/running cadence, jump lift and ground shadow, mining motion, a magical focus gesture, and hit reactions. The character visuals use a stylized 2.5D drawing system in the existing side-view game; they are not full 3D Skeleton3D models.
-
-
-### Real 3D skeletal character prototype
-
-A standalone preview scene is available at `scenes/character_rig_demo.tscn`. Open it in Godot 4.5 and run it to inspect six original low-poly character models built from 3D meshes attached to a real `Skeleton3D` bone hierarchy. It includes distinct silhouettes, lit materials, procedural walk/run cycles, jumps, hit reactions, a worker task pose, and a magical focus pose. The rig is connected to the battle renderer through small transparent SubViewports; combat logic and UI remain 2D while characters are rendered in 3D. Android performance and visual quality still need device testing.
