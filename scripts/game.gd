@@ -11,9 +11,11 @@ const AWAY_X := 1112.0
 const MINE_X := 640.0
 const MINE_Y := 512.0
 const BAG_MAX := 90.0
-const JOY_C := Vector2(96, 508)
-const ACT_C := Vector2(1184, 508)
-const JOY_R := 54.0
+const JOY_C := Vector2(108, 628)
+const ACT_C := Vector2(1172, 628)
+const JOY_R := 58.0
+const CAM_ZOOM := 1.58
+const CAM_FOCUS := Vector2(640.0, 368.0)
 
 const GOLD := Color("#e2b34a")
 const BONE := Color("#f3efe6")
@@ -100,6 +102,10 @@ var miner_warned := false
 var sfx_players: Array[AudioStreamPlayer] = []
 var music: AudioStreamPlayer
 var sfx_streams := {}
+var cam_x := 430.0
+var cam_y := 508.0
+var cam_nudge := 0.0
+var ui_font: Font
 
 func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--validate-data"):
@@ -117,6 +123,10 @@ func _ready() -> void:
 		return
 	rng.randomize()
 	_load_save()
+	ui_font = ThemeDB.fallback_font
+	var font_res = load("res://assets/fonts/Vazirmatn-Medium.ttf")
+	if font_res is Font:
+		ui_font = font_res
 	for i in 6:
 		var player := AudioStreamPlayer.new()
 		player.volume_db = -6.0
@@ -197,6 +207,8 @@ func _process(delta: float) -> void:
 	tick += dt
 	toast_t = maxf(0.0, toast_t - dt)
 	shake = maxf(0.0, shake - dt * 16.0)
+	if screen == "battle" or screen == "result":
+		_follow_camera(dt)
 	if screen == "battle":
 		if intro_t > 0.0 and not paused:
 			intro_t = maxf(0.0, intro_t - dt)
@@ -377,6 +389,9 @@ func _begin(index: int) -> void:
 	miner_warned = false
 	joy = Vector2.ZERO
 	action_held = false
+	cam_x = 420.0
+	cam_y = 508.0
+	cam_nudge = 0.0
 	_toast(_stage_name_fa(stage_i))
 
 func _finish() -> void:
@@ -511,22 +526,22 @@ func _enqueue(side: int, kind: String) -> bool:
 		return false
 	var st: Dictionary = STATS[kind]
 	if side == 0 and not _unlocked(kind):
-		_toast(str(st["name"]) + " unlocks later")
+		_toast("این نیرو در مرحلهٔ بعد باز می‌شود")
 		return false
 	var purse := gold if side == 0 else enemy_gold
 	if purse < int(st["cost"]):
 		if side == 0:
-			_toast("Not enough gold")
+			_toast("طلا کافی نیست")
 			_sfx("ui")
 		return false
 	if _pop(side) + int(st["pop"]) > _pop_limit():
 		if side == 0:
-			_toast("Population is full")
+			_toast("جمعیت پر است")
 		return false
 	var q: Array = player_queue if side == 0 else enemy_queue
 	if q.size() >= 5:
 		if side == 0:
-			_toast("Queue is full")
+			_toast("صف آموزش پر است")
 		return false
 	if side == 0:
 		gold -= int(st["cost"])
@@ -974,13 +989,13 @@ func _roll(mix: Array) -> String:
 func _use_ability() -> void:
 	var index := _index_of(selected_id)
 	if index < 0:
-		_toast("Tap one of your soldiers")
+		_toast("یکی از سربازها را لمس کن")
 		return
 	var u: Dictionary = units[index]
 	if float(u["dead"]) > 0.0:
 		return
 	if float(u["ability"]) > 0.0:
-		_toast("Not ready")
+		_toast("هنوز آماده نیست")
 		return
 	var kind := str(u["kind"])
 	match kind:
@@ -1171,7 +1186,7 @@ func _miner_warning() -> void:
 			queued += 1
 	if alive + queued == 0 and not miner_warned:
 		miner_warned = true
-		_toast("Miners are down. Train another.")
+		_toast("معدن‌چی نداری. یکی آموزش بده.")
 	elif alive > 0:
 		miner_warned = false
 
@@ -1280,6 +1295,12 @@ func _pointer_move(id: int, screen_pos: Vector2) -> void:
 		return
 	var rec: Dictionary = pointers[id]
 	rec["p"] = _to_game(screen_pos)
+	if str(rec["kind"]) == "field" or str(rec["kind"]) == "pan":
+		var delta := Vector2(rec["p"]) - Vector2(rec["o"])
+		if str(rec["kind"]) == "field" and delta.length() > 28.0 and screen == "battle":
+			rec["kind"] = "pan"
+		if str(rec["kind"]) == "pan":
+			cam_nudge = -delta.x / CAM_ZOOM
 	pointers[id] = rec
 	if str(rec["kind"]) == "joy":
 		_set_joy(rec["p"])
@@ -1326,11 +1347,11 @@ func _set_order(order: String) -> void:
 	p_order = order
 	_sfx("ui")
 	if order == "attack":
-		_toast("Army attacking")
+		_toast("لشکر حمله می‌کند")
 	elif order == "defend":
-		_toast("Army holding the line")
+		_toast("لشکر خط را نگه می‌دارد")
 	else:
-		_toast("Garrison — miners falling back")
+		_toast("عقب‌نشینی — معدن‌چی‌ها برمی‌گردند")
 
 func _click(id: String) -> void:
 	_sfx("ui")
@@ -1417,14 +1438,15 @@ func _restart_current_mode() -> void:
 func _field_tap(p: Vector2) -> void:
 	if screen != "battle" or paused or ending != "" or intro_t > 0.0:
 		return
-	if p.y > 590.0:
+	if p.y < 168.0:
 		return
+	var world := _ui_to_world(p)
 	var best := -1
-	var best_d := 46.0
+	var best_d := 52.0
 	for u in units:
 		if int(u["side"]) != 0 or float(u["dead"]) > 0.0:
 			continue
-		var d := p.distance_to(Vector2(float(u["x"]), float(u["y"]) - 30.0))
+		var d := world.distance_to(Vector2(float(u["x"]), float(u["y"]) - 30.0))
 		if d < best_d:
 			best_d = d
 			best = int(u["id"])
@@ -1479,7 +1501,7 @@ func _hit_button(p: Vector2) -> String:
 			if Rect2(470, 428, 340, 52).has_point(p):
 				return "to_map"
 			return ""
-		if Rect2(24, 16, 86, 42).has_point(p):
+		if Rect2(12, 12, 64, 72).has_point(p):
 			return "pause"
 		if _order_rect(0).has_point(p):
 			return "order_attack"
@@ -1493,40 +1515,67 @@ func _hit_button(p: Vector2) -> String:
 	return ""
 
 func _order_rect(i: int) -> Rect2:
-	return Rect2(403.0 + float(i) * 162.0, 604.0, 150.0, 44.0)
+	return Rect2(16.0 + float(i) * 132.0, 176.0, 124.0, 40.0)
 
 func _train_rect(i: int) -> Rect2:
-	return Rect2(18.0 + float(i) * 210.0, 656.0, 200.0, 56.0)
+	return Rect2(240.0 + float(i) * 170.0, 8.0, 162.0, 80.0)
 
 func _stage_rect(i: int) -> Rect2:
 	var col := i % 4
 	var row := int(i / 4.0)
 	return Rect2(70.0 + float(col) * 300.0, 128.0 + float(row) * 184.0, 276.0, 162.0)
 
+func _ui_to_world(p: Vector2) -> Vector2:
+	return (p - CAM_FOCUS) / CAM_ZOOM + Vector2(cam_x, cam_y)
+
+func _follow_camera(dt: float) -> void:
+	var follow := 460.0
+	var idx := _index_of(selected_id)
+	if idx >= 0:
+		follow = float(units[idx]["x"])
+	else:
+		var front := HOME_X + 90.0
+		for u in units:
+			if int(u["side"]) == 0 and str(u["kind"]) != "MINER" and float(u["dead"]) <= 0.0:
+				front = maxf(front, float(u["x"]))
+		follow = front
+	if not _pointer_kind("pan"):
+		cam_nudge = lerpf(cam_nudge, 0.0, 1.0 - exp(-2.2 * dt))
+	var half := (W * 0.5) / CAM_ZOOM
+	var target := clampf(follow + cam_nudge, half + 6.0, W - half - 6.0)
+	var blend := 1.0 - exp(-5.8 * dt)
+	cam_x = lerpf(cam_x, target, blend)
+	cam_y = lerpf(cam_y, 508.0, blend)
+
 func _draw() -> void:
 	var viewport_size := get_viewport_rect().size
 	var uniform := minf(viewport_size.x / W, viewport_size.y / H)
 	var offset := (viewport_size - Vector2(W, H) * uniform) * 0.5
-	var world_off := offset
-	if shake > 0.0:
-		world_off += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * shake * uniform
-	draw_set_transform(world_off, 0.0, Vector2.ONE * uniform)
-	if screen == "menu":
-		_draw_menu()
-	elif screen == "help":
-		_draw_help()
-	elif screen == "map":
-		_draw_map()
-	else:
+	var cam_on := screen == "battle" or screen == "result"
+	if cam_on:
+		var origin := offset + (CAM_FOCUS - Vector2(cam_x, cam_y) * CAM_ZOOM) * uniform
+		if shake > 0.0:
+			origin += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)) * shake * uniform
+		draw_set_transform(origin, 0.0, Vector2.ONE * uniform * CAM_ZOOM)
 		_draw_world()
 		draw_set_transform(offset, 0.0, Vector2.ONE * uniform)
 		_draw_battle_ui()
+	else:
+		draw_set_transform(offset, 0.0, Vector2.ONE * uniform)
+		if screen == "menu":
+			_draw_menu()
+		elif screen == "help":
+			_draw_help()
+		elif screen == "map":
+			_draw_map()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _draw_world() -> void:
 	_draw_sky()
 	_draw_ground()
 	_draw_mine()
+	_draw_fort(HOME_X, true)
+	_draw_fort(AWAY_X, false)
 	_draw_statue(HOME_X, player_hp / maxf(1.0, player_max), true)
 	_draw_statue(AWAY_X, enemy_hp / maxf(1.0, enemy_max), false)
 	for p in projectiles:
@@ -1706,211 +1755,239 @@ func _draw_ellipse_shape(center: Vector2, radii: Vector2, color: Color) -> void:
 		points.append(center + Vector2(cos(angle) * radii.x, sin(angle) * radii.y))
 	draw_colored_polygon(points, color)
 
-# ---------------------------------------------------------
-# بخش رسم شخصیت‌ها (کاملاً بازنویسی شده به سبک Stick War)
-# ---------------------------------------------------------
+func _limb(a: Vector2, b: Vector2, width: float, color: Color) -> void:
+	draw_line(a, b, color, width, true)
+	draw_circle(a, width * 0.46, color)
+	draw_circle(b, width * 0.46, color)
+
+func _draw_fort(x: float, friendly: bool) -> void:
+	var dir := -1.0 if friendly else 1.0
+	var wall := x + dir * 46.0
+	var stone := Color("#6e655c")
+	var dark := Color("#2c2824")
+	draw_rect(Rect2(wall - 50, 446, 100, 140), dark)
+	draw_rect(Rect2(wall - 62, 424, 36, 96), stone)
+	draw_rect(Rect2(wall + 26, 424, 36, 96), stone)
+	for i in 5:
+		draw_rect(Rect2(wall - 52 + float(i) * 22.0, 434, 12, 16), Color("#948b80"))
+	draw_rect(Rect2(wall - 16, 512, 32, 74), Color("#161310"))
+	draw_line(Vector2(wall, 470), Vector2(wall, 412), Color("#efe6d4"), 2.2, true)
+	var banner := BLUE if friendly else RED
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(wall, 412),
+		Vector2(wall - dir * 26.0, 424),
+		Vector2(wall, 438),
+	]), banner)
 
 func _draw_stick(u: Dictionary) -> void:
 	var kind := str(u["kind"])
-	var sc := float(STATS[kind]["scale"]) * 1.3 # مقیاس بزرگتر برای هماهنگی با بازی اصلی
+	var sc := float(STATS[kind]["scale"]) * 1.28
 	var x := float(u["x"])
 	var y := float(u["y"])
 	var facing := float(u.get("facing", 1.0))
 	var moving := bool(u.get("moving", false))
 	var phase := float(u.get("anim", 0.0))
 	var dead := float(u.get("dead", 0.0))
-	var action := str(u.get("action", ""))
-	var action_len := maxf(0.05, float(u.get("action_len", 0.5)))
-	var action_t := float(u.get("action_t", 0.0))
-	var progress := clampf(1.0 - action_t / action_len, 0.0, 1.0)
-	
 	var friendly := int(u["side"]) == 0
-	# رنگ‌بندی استیک‌وار: مشکی خالص برای خودی‌ها، قرمز تیره برای دشمنان
-	var body_color := Color("#0a0a0a") if friendly else Color("#2a0a0a") 
-	var eye_color := Color("#ffffff") if friendly else Color("#ff4444")
-
+	var body := Color("#0c0d10")
+	if float(u.get("flash", 0.0)) > 0.0:
+		body = Color("#f7f4ee")
+	elif not friendly:
+		body = Color("#16080b")
+	var eye := Color("#f7f4ee") if friendly else Color("#ff5d4a")
 	if dead > 0.0:
 		var fall := clampf(1.0 - dead / 0.55, 0.0, 1.0)
-		# انیمیشن افتادن روی زمین
-		var fallen_head := Vector2(x + facing * 31.0 * fall, y - 8.0 - 32.0 * (1.0 - fall))
-		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(19.0 * sc, 4.5 * sc), Color(0, 0, 0, 0.26))
-		draw_line(Vector2(x, y - 10.0 * sc), fallen_head, body_color, 6.0 * sc, true)
-		draw_circle(fallen_head, 8.0 * sc, body_color)
+		var fallen := Vector2(x + facing * 38.0 * fall * sc, y - 6.0 - 36.0 * (1.0 - fall) * sc)
+		_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(16.0 * sc, 4.0 * sc), Color(0, 0, 0, 0.28))
+		_limb(Vector2(x - facing * 6.0 * sc, y - 8.0 * sc), fallen, 4.2 * sc, body)
+		draw_circle(fallen, 7.2 * sc, body)
 		return
-
-	var jump_lift := 0.0
+	var jump := 0.0
 	if float(u.get("leap", 0.0)) > 0.0:
-		jump_lift = sin(clampf(1.0 - float(u["leap"]) / 0.2, 0.0, 1.0) * PI) * 26.0 * sc
-		
-	var body_y := y - jump_lift
+		jump = sin(clampf(1.0 - float(u["leap"]) / 0.2, 0.0, 1.0) * PI) * 28.0 * sc
+	var ground_y := y - jump
 	var gait := sin(phase)
-	var body_bob := (absf(gait) * 2.0 if moving else sin(tick * 2.0 + float(u["id"])) * 0.5) * sc
-	
-	# نقاط اصلی اسکلت آدمک
-	var hip := Vector2(x, body_y - 24.0 * sc - body_bob)
-	var neck := Vector2(x - facing * gait * 1.5 * sc if moving else x, body_y - 48.0 * sc - body_bob)
-	var head := Vector2(neck.x + facing * 1.0 * sc, body_y - 62.0 * sc - body_bob)
-
-	# سایه زیر پا
-	_draw_ellipse_shape(Vector2(x, y + 2.0), Vector2(14.0 * sc, 3.8 * sc), Color(0, 0, 0, 0.30))
-
-	# محاسبه زاویه پاها (راه رفتن)
-	var stride := (1.5 if moving else 0.0)
-	var swing := gait * stride
-	var foot_a := Vector2(x + facing * (5.0 + swing * 9.0) * sc, body_y - maxf(0.0, sin(phase)) * 5.0 * sc)
-	var foot_b := Vector2(x - facing * (5.0 + swing * 9.0) * sc, body_y - maxf(0.0, -sin(phase)) * 5.0 * sc)
-	var knee_a := Vector2(x + facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - maxf(0.0, sin(phase)) * 2.0 * sc)
-	var knee_b := Vector2(x - facing * (2.5 + swing * 4.8) * sc, body_y - 12.5 * sc - maxf(0.0, -sin(phase)) * 2.0 * sc)
-	
-	if jump_lift > 1.0:
-		foot_a = Vector2(x + facing * 9.0 * sc, body_y - 5.0 * sc)
-		foot_b = Vector2(x - facing * 8.0 * sc, body_y - 2.0 * sc)
-		knee_a = Vector2(x + facing * 7.0 * sc, body_y - 15.0 * sc)
-		knee_b = Vector2(x - facing * 5.0 * sc, body_y - 13.0 * sc)
-
-	var leg_thick := (6.0 if kind == "GIANT" else 4.0) * sc
-	
-	# رسم پاها (خطوط ضخیم با لبه‌های گرد)
-	draw_line(hip, knee_b, body_color, leg_thick, true)
-	draw_line(knee_b, foot_b, body_color, leg_thick * 0.8, true)
-	draw_line(hip, knee_a, body_color, leg_thick, true)
-	draw_line(knee_a, foot_a, body_color, leg_thick * 0.8, true)
-
-	# محاسبه دست‌ها
-	var shoulder := neck + Vector2(0.0, 5.0 * sc)
-	var arm_swing := gait * 3.0 * sc if moving else 0.0
-	var elbow := shoulder + Vector2(facing * 6.0 * sc + arm_swing, 10.0 * sc)
-	var hand := shoulder + Vector2(facing * 10.0 * sc + arm_swing, 18.0 * sc)
-	
-	# تنظیم موقعیت دست‌ها بسته به نوع سلاح
+	var bob := (absf(gait) * 2.6 if moving else sin(tick * 2.2 + float(u["id"])) * 0.55) * sc
+	var hip := Vector2(x, ground_y - 22.0 * sc - bob)
+	var chest := Vector2(x + facing * gait * 1.1 * sc, ground_y - 44.0 * sc - bob)
+	var neck := Vector2(chest.x, ground_y - 52.0 * sc - bob)
+	var head := Vector2(neck.x + facing * 1.2 * sc, ground_y - 64.0 * sc - bob)
+	var thick := (6.6 if kind == "GIANT" else 4.25) * sc
+	var thin := thick * 0.82
+	_draw_ellipse_shape(Vector2(x, y + 3.0), Vector2((20.0 if kind == "GIANT" else 14.0) * sc, 4.4 * sc), Color(0, 0, 0, 0.32))
+	if moving:
+		draw_circle(Vector2(x - facing * 8.0 * sc, y + 1.0), 2.4 * sc, Color(0.72, 0.64, 0.5, 0.28))
+	if kind == "MAGE":
+		draw_colored_polygon(PackedVector2Array([
+			neck + Vector2(-facing * 3.0 * sc, 4.0 * sc),
+			hip + Vector2(-facing * 16.0 * sc, 8.0 * sc),
+			hip + Vector2(facing * 12.0 * sc, 10.0 * sc),
+			neck + Vector2(facing * 5.0 * sc, 6.0 * sc),
+		]), Color("#24182f"))
 	if kind == "ARCHER":
-		hand = Vector2(x + facing * 15.0 * sc, body_y - 34.0 * sc)
-		elbow = shoulder.lerp(hand, 0.55) + Vector2(0.0, 4.0 * sc)
+		draw_line(hip + Vector2(-facing * 5.0 * sc, -6.0 * sc), hip + Vector2(-facing * 9.0 * sc, -20.0 * sc), Color("#6a4a30"), 2.3 * sc, true)
+	var stride := 1.35 if moving else 0.05
+	var swing_g := gait * stride
+	var lift_a := maxf(0.0, sin(phase))
+	var lift_b := maxf(0.0, -sin(phase))
+	var knee_a := Vector2(x + facing * (3.2 + swing_g * 5.2) * sc, ground_y - 12.0 * sc - lift_a * 2.0 * sc)
+	var knee_b := Vector2(x - facing * (3.2 + swing_g * 5.2) * sc, ground_y - 12.0 * sc - lift_b * 2.0 * sc)
+	var foot_a := Vector2(x + facing * (6.5 + swing_g * 11.0) * sc, ground_y - lift_a * 7.5 * sc)
+	var foot_b := Vector2(x - facing * (6.5 + swing_g * 11.0) * sc, ground_y - lift_b * 7.5 * sc)
+	if jump > 1.0:
+		knee_a = Vector2(x + facing * 8.0 * sc, ground_y - 16.0 * sc)
+		knee_b = Vector2(x - facing * 6.0 * sc, ground_y - 14.0 * sc)
+		foot_a = Vector2(x + facing * 12.0 * sc, ground_y - 6.0 * sc)
+		foot_b = Vector2(x - facing * 10.0 * sc, ground_y - 4.0 * sc)
+	_limb(hip, knee_b, thin, body)
+	_limb(knee_b, foot_b, thin * 0.9, body)
+	_limb(hip, knee_a, thin, body)
+	_limb(knee_a, foot_a, thin * 0.9, body)
+	_limb(hip, chest, thick, body)
+	var attack := 0.0
+	if float(u.get("swing", 0.0)) > 0.0:
+		attack = sin(clampf(1.0 - float(u["swing"]) / 0.28, 0.0, 1.0) * PI)
+	var shoulder := neck + Vector2(0, 3.2 * sc)
+	var back_hand := shoulder + Vector2(-facing * (8.0 + gait * 2.4) * sc, 13.0 * sc)
+	var hand := shoulder + Vector2(facing * (12.0 + attack * 8.0) * sc, (11.0 - attack * 18.0) * sc)
+	var action := str(u.get("action", ""))
+	var action_len := maxf(0.05, float(u.get("action_len", 0.42)))
+	var mine_p := clampf(1.0 - float(u.get("action_t", 0.0)) / action_len, 0.0, 1.0)
+	if kind == "ARCHER":
+		hand = Vector2(x + facing * (15.0 + attack * 4.0) * sc, ground_y - 40.0 * sc - bob)
 	elif kind == "SPEAR":
-		hand = Vector2(x + facing * 12.0 * sc, body_y - 28.0 * sc)
-		elbow = shoulder.lerp(hand, 0.52) + Vector2(facing * 4.0 * sc, 0.0)
+		hand = Vector2(x + facing * (13.0 + attack * 8.0) * sc, ground_y - (32.0 + attack * 2.0) * sc - bob)
 	elif kind == "GIANT":
-		hand = Vector2(x + facing * 13.0 * sc, body_y - 30.0 * sc)
-		elbow = shoulder.lerp(hand, 0.55) + Vector2(facing * 4.0 * sc, 2.0 * sc)
+		hand = Vector2(x + facing * (14.0 + attack * 6.0) * sc, ground_y - (28.0 + attack * 22.0) * sc - bob)
+	elif kind == "MINER" and action == "mine":
+		if mine_p < 0.35:
+			var wind := clampf(mine_p / 0.35, 0.0, 1.0)
+			hand = Vector2(x + facing * (4.0 + wind * 2.0) * sc, ground_y - (46.0 + wind * 14.0) * sc)
+		else:
+			var work := clampf((mine_p - 0.35) / 0.65, 0.0, 1.0)
+			hand = Vector2(x + facing * (7.0 + work * 14.0) * sc, ground_y - (58.0 - work * 30.0) * sc)
+	var elbow := shoulder.lerp(hand, 0.52) + Vector2(0.0, 3.0 * sc)
+	_limb(shoulder, back_hand, thin * 0.78, body)
+	_limb(shoulder, elbow, thin * 0.88, body)
+	_limb(elbow, hand, thin * 0.8, body)
+	draw_line(hip + Vector2(-6.5 * sc, -1.0 * sc), hip + Vector2(6.5 * sc, 1.0 * sc), BLUE if friendly else RED, 2.3 * sc, true)
+	if kind == "MAGE":
+		draw_colored_polygon(PackedVector2Array([
+			head + Vector2(-6.5 * sc, -1.0 * sc),
+			head + Vector2(0.0, -26.0 * sc),
+			head + Vector2(6.5 * sc, -1.0 * sc),
+		]), body)
+	elif kind == "ARCHER":
+		draw_colored_polygon(PackedVector2Array([
+			head + Vector2(-8.0 * sc, 2.0 * sc),
+			head + Vector2(-1.0 * sc, -14.0 * sc),
+			head + Vector2(8.0 * sc, -6.0 * sc),
+			head + Vector2(7.0 * sc, 5.0 * sc),
+		]), body)
 	elif kind == "MINER":
-		if action == "mine":
-			if progress < 0.35:
-				var wind := clampf(progress / 0.35, 0.0, 1.0)
-				hand = Vector2(x + facing * (5.0 + 2.0 * wind) * sc, body_y - (46.0 + 10.0 * wind) * sc)
-			else:
-				var work := clampf((progress - 0.35) / 0.65, 0.0, 1.0)
-				hand = Vector2(x + facing * (8.0 + 12.0 * work) * sc, body_y - (55.0 - 29.0 * work) * sc)
-			elbow = shoulder.lerp(hand, 0.52) + Vector2(facing * 3.0 * sc, -2.0 * sc)
-
-	# Torso illustration is a high-resolution, layered SVG per unit class.
-	# Width differs by class so the heavy unit reads as a true heavyweight.
-	var torso_width := (38.0 if kind == "GIANT" else 29.0) * sc
-	var torso_height := 31.0 * sc
-	var torso_rect := Rect2(
-		Vector2(x - torso_width * 0.5, neck.y - 2.0 * sc),
-		Vector2(torso_width, torso_height)
-	)
-	draw_texture_rect(UNIT_TORSO_TEXTURES[kind], torso_rect, false)
-	# A restrained faction tab keeps both armies readable without repainting the whole sprite.
-	var faction_tint := BLUE if friendly else RED
-	draw_line(
-		Vector2(x - 4.5 * sc, neck.y + 13.0 * sc),
-		Vector2(x + 4.5 * sc, neck.y + 13.8 * sc),
-		faction_tint,
-		1.9 * sc,
-		true
-	)
-# رسم دست‌ها
-	draw_line(shoulder, elbow, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
-	draw_line(elbow, hand, body_color, (5.0 if kind == "GIANT" else 3.5) * sc, true)
-
-	# Detailed class headgear/face is a separate SVG layer, aligned to the animated head pivot.
-	# The eye shapes, hood/helmet silhouette and material highlights are painted into each original vector asset.
-	var head_width := (34.0 if kind == "GIANT" else 28.5) * sc
-	var head_height := 33.0 * sc
-	var head_rect := Rect2(
-		Vector2(head.x - head_width * 0.5, head.y - 16.6 * sc),
-		Vector2(head_width, head_height)
-	)
-	draw_texture_rect(UNIT_HEAD_TEXTURES[kind], head_rect, false)
-
-	# افکت انتخاب شدن نیرو
+		draw_colored_polygon(PackedVector2Array([
+			head + Vector2(-8.0 * sc, -1.0 * sc),
+			head + Vector2(-5.0 * sc, -11.0 * sc),
+			head + Vector2(7.0 * sc, -9.0 * sc),
+			head + Vector2(8.0 * sc, 1.0 * sc),
+		]), Color("#3a342c"))
+		draw_circle(head + Vector2(facing * 7.5 * sc, -7.0 * sc), 2.8 * sc, GOLD)
+	draw_circle(head, (10.2 if kind == "GIANT" else 7.6) * sc, body)
+	var er := (1.7 if kind == "GIANT" else 1.35) * sc
+	draw_circle(head + Vector2(facing * 1.8 * sc, -0.8 * sc), er, eye)
+	draw_circle(head + Vector2(facing * 4.5 * sc, -0.3 * sc), er * 0.82, eye)
+	if kind == "SWORD":
+		draw_colored_polygon(PackedVector2Array([
+			head + Vector2(-3.2 * sc, -6.2 * sc),
+			head + Vector2(0.0, -15.0 * sc),
+			head + Vector2(3.2 * sc, -6.2 * sc),
+		]), Color("#8e2f34"))
+	elif kind == "SPEAR":
+		draw_line(head + Vector2(-6.0 * sc, -3.5 * sc), head + Vector2(6.5 * sc, -4.5 * sc), Color("#d5dde6"), 2.4 * sc, true)
+	elif kind == "GIANT":
+		draw_line(head + Vector2(-8.0 * sc, -1.0 * sc), head + Vector2(8.0 * sc, -2.0 * sc), Color("#5a4534"), 3.6 * sc, true)
+	if float(u.get("block", 0.0)) > 0.0 and kind == "SPEAR":
+		draw_arc(Vector2(x + facing * 10.0 * sc, ground_y - 32.0 * sc), 20.0 * sc, -1.1, 1.1, 14, Color("#e7eef8"), 2.2, true)
+	var progress := attack
+	if kind == "MINER" and action == "mine":
+		progress = mine_p
+	_draw_weapon_silhouette(kind, hand, facing, sc, action, progress, body)
+	if kind == "MINER" and float(u.get("bag", 0.0)) > 3.0:
+		var fill := clampf(float(u["bag"]) / BAG_MAX, 0.0, 1.0)
+		var sack := hip + Vector2(-facing * 11.0 * sc, -2.0 * sc)
+		draw_circle(sack, (4.2 + fill * 5.5) * sc, Color("#b87422"))
+		draw_circle(sack + Vector2(-1.0 * sc, -1.5 * sc), (1.8 + fill * 2.2) * sc, Color("#f2c56a"))
+	var pins := int(u.get("pins", 0))
+	for n in pins:
+		var px := chest.x - 6.0 * sc + float(n) * 4.2 * sc
+		draw_line(Vector2(px, chest.y + 2.0 * sc), Vector2(px - facing * 10.0 * sc, chest.y - 8.0 * sc), GOLD, 1.35 * sc, true)
 	var selected := int(u.get("id", -99)) == selected_id and friendly
 	if selected:
 		var pulse := 0.5 + 0.5 * sin(tick * 7.0)
-		draw_arc(Vector2(x, y + 2.0), 20.0 * sc, 0.0, TAU, 24, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.5, true)
-		_star(Vector2(x, head.y - 18.0 * sc), 7.5, GOLD)
-
-	# رسم سلاح (بسیار بزرگ و متمایز)
-	_draw_weapon_silhouette(kind, hand, facing, sc, action, progress, body_color)
-
-	# نوار سلامتی بالای سر
-	if dead <= 0.0 and (float(u.get("hp", 1.0)) < float(u.get("max_hp", 1.0)) or selected):
+		draw_arc(Vector2(x, y + 2.0), 18.0 * sc, 0.0, TAU, 24, Color(GOLD.r, GOLD.g, GOLD.b, pulse), 2.4, true)
+		_star(Vector2(x, head.y - 16.0 * sc), 6.4 * sc, GOLD)
+	if float(u.get("hp", 1.0)) < float(u.get("max_hp", 1.0)) or selected:
 		var ratio := clampf(float(u.get("hp", 1.0)) / maxf(1.0, float(u.get("max_hp", 1.0))), 0.0, 1.0)
-		draw_rect(Rect2(x - 20.0 * sc, head.y - 19.0 * sc, 40.0 * sc, 4.0 * sc), Color(0, 0, 0, 0.72))
-		draw_rect(Rect2(x - 19.0 * sc, head.y - 18.5 * sc, 38.0 * sc * ratio, 2.6 * sc), GREEN if friendly else RED)
+		draw_rect(Rect2(x - 16.0 * sc, head.y - 20.0 * sc, 32.0 * sc, 3.6 * sc), Color(0, 0, 0, 0.72))
+		draw_rect(Rect2(x - 15.4 * sc, head.y - 19.6 * sc, 30.8 * sc * ratio, 2.6 * sc), GREEN if friendly else RED)
 
 func _draw_weapon_silhouette(kind: String, hand: Vector2, facing: float, sc: float, action: String, progress: float, color: Color) -> void:
 	var dir := facing
-	
 	if kind == "ARCHER":
-		# کمان کلاسیک Stick War
-		var bow_center := hand + Vector2(dir * 5.0 * sc, 0)
-		var top := bow_center + Vector2(0, -22.0 * sc)
-		var bottom := bow_center + Vector2(0, 22.0 * sc)
-		draw_line(top, bow_center + Vector2(dir * 8.0 * sc, 0), color, 3.5 * sc, true)
-		draw_line(bow_center + Vector2(dir * 8.0 * sc, 0), bottom, color, 3.5 * sc, true)
-		# رشته کمان (خاکستری)
-		draw_line(top, bottom, Color("#aaaaaa"), 1.5 * sc, true)
-		
+		var bow := hand + Vector2(dir * 4.0 * sc, 0.0)
+		var top := bow + Vector2(-dir * 2.0 * sc, -20.0 * sc)
+		var bot := bow + Vector2(-dir * 2.0 * sc, 20.0 * sc)
+		var belly := bow + Vector2(dir * 7.0 * sc, 0.0)
+		draw_line(top, belly, color, 3.1 * sc, true)
+		draw_line(belly, bot, color, 3.1 * sc, true)
+		var pull := 8.0 * sc * progress
+		draw_line(top, bot + Vector2(-dir * pull, 0.0), Color("#d7d2c8"), 1.3 * sc, true)
+		if progress > 0.15:
+			draw_line(hand, hand + Vector2(dir * (18.0 + progress * 16.0) * sc, -1.0 * sc), GOLD, 1.6 * sc, true)
 	elif kind == "MINER":
-		# کلنگ معدن
-		var angle := -1.6
+		var angle := -1.15
 		if action == "mine":
 			if progress < 0.35:
-				angle = lerpf(-1.6, -2.45, progress / 0.35)
+				angle = lerpf(-1.15, -2.4, progress / 0.35)
 			else:
-				angle = lerpf(-2.45, 0.5, clampf((progress - 0.35) / 0.65, 0.0, 1.0))
-		var tool_tip := hand + Vector2(dir * cos(angle), sin(angle)) * 28.0 * sc
-		draw_line(hand, tool_tip, Color("#4a3525"), 4.0 * sc, true) # چوب
-		# تیغه کلنگ
-		var p1 := tool_tip + Vector2(-4.0 * dir, -8.0) * sc
-		var p2 := tool_tip + Vector2(12.0 * dir, 2.0) * sc
-		draw_line(p1, p2, Color("#778899"), 4.5 * sc, true)
-		
+				angle = lerpf(-2.4, 0.55, clampf((progress - 0.35) / 0.65, 0.0, 1.0))
+		var tip := hand + Vector2(dir * cos(angle), sin(angle)) * 30.0 * sc
+		draw_line(hand, tip, Color("#5a3d28"), 3.6 * sc, true)
+		draw_line(tip + Vector2(-dir * 3.0 * sc, -9.0 * sc), tip + Vector2(dir * 12.0 * sc, 3.0 * sc), Color("#c5ced6"), 4.2 * sc, true)
 	elif kind == "SPEAR":
-		# نیزه و سپر سنگین (Spearton)
-		var start := hand - Vector2(dir * 10.0 * sc, 0)
-		var spear_tip := hand + Vector2(dir * 55.0 * sc, -5.0 * sc)
-		draw_line(start, spear_tip, Color("#6b4c3a"), 3.0 * sc, true)
-		# نوک نیزه (نقره‌ای)
-		draw_line(spear_tip, spear_tip - Vector2(dir * 12.0 * sc, -4.0 * sc), Color("#aeb9c4"), 4.0 * sc, true)
-		# سپر بزرگ
-		var shield := hand + Vector2(dir * 10.0 * sc, 6.0 * sc)
-		var shield_pts := PackedVector2Array([
-			shield + Vector2(-12.0 * dir, -18.0) * sc,
-			shield + Vector2(12.0 * dir, -18.0) * sc,
-			shield + Vector2(15.0 * dir, 12.0) * sc,
-			shield + Vector2(0, 22.0 * sc),
-			shield + Vector2(-15.0 * dir, 12.0) * sc
+		var shaft_end := hand + Vector2(dir * (48.0 + progress * 10.0) * sc, (-6.0 + progress * 8.0) * sc)
+		draw_line(hand - Vector2(dir * 16.0 * sc, -4.0 * sc), shaft_end, Color("#6d4c34"), 2.8 * sc, true)
+		draw_line(shaft_end, shaft_end + Vector2(dir * 12.0 * sc, -3.0 * sc), Color("#e4ebf2"), 3.6 * sc, true)
+		var shield := hand + Vector2(-dir * 2.0 * sc, 8.0 * sc)
+		if progress > 0.2:
+			shield += Vector2(dir * 6.0 * sc, 0.0)
+		var pts := PackedVector2Array([
+			shield + Vector2(-dir * 10.0, -16.0) * sc,
+			shield + Vector2(dir * 12.0, -16.0) * sc,
+			shield + Vector2(dir * 14.0, 10.0) * sc,
+			shield + Vector2(0.0, 20.0 * sc),
+			shield + Vector2(-dir * 14.0, 10.0) * sc,
 		])
-		draw_colored_polygon(shield_pts, color)
-		draw_polyline(shield_pts, Color("#555555"), 2.0 * sc, true)
-		
+		draw_colored_polygon(pts, color)
+		draw_polyline(pts, Color("#8d949c"), 1.6 * sc, true)
+		draw_circle(shield, 3.2 * sc, Color("#d4553c") if int(facing) == 0 else (BLUE if dir > 0.0 else RED))
 	elif kind == "GIANT":
-		# چماق غول
-		var club_tip := hand + Vector2(dir * 45.0 * sc, -18.0 * sc)
-		draw_line(hand, club_tip, color, 14.0 * sc, true)
-		draw_circle(club_tip, 16.0 * sc, color)
-		draw_circle(club_tip + Vector2(-3.0 * sc, -3.0 * sc), 11.0 * sc, color.lightened(0.2))
-		
-	else: # SWORD (شمشیرزن)
-		var tip := hand + Vector2(dir * 40.0 * sc, -18.0 * sc)
-		# شمشیر (تیغه نقره‌ای)
-		draw_line(hand, tip, Color("#e0e0e0"), 4.0 * sc, true)
-		# دسته شمشیر
-		var guard := hand + Vector2(dir * 6.0 * sc, -2.0 * sc)
-		draw_line(guard + Vector2(-dir * 6.0 * sc, -3.0 * sc), guard + Vector2(dir * 6.0 * sc, 3.0 * sc), Color("#8b7355"), 3.5 * sc, true)
+		var tip := hand + Vector2(dir * (28.0 + progress * 8.0) * sc, (-22.0 + progress * 26.0) * sc)
+		draw_line(hand, tip, Color("#4a3428"), 7.5 * sc, true)
+		draw_circle(tip, 11.0 * sc, Color("#3a2a22"))
+		draw_circle(tip + Vector2(-dir * 2.0 * sc, -2.0 * sc), 6.0 * sc, Color("#6a5144"))
+	elif kind == "MAGE":
+		var orb := hand + Vector2(dir * 8.0 * sc, -22.0 * sc)
+		draw_line(hand, orb, Color("#6a5030"), 3.2 * sc, true)
+		var glow := Color("#9ec2ff")
+		glow.a = 0.85
+		draw_circle(orb, (5.5 + progress * 3.0) * sc, glow)
+		draw_circle(orb, 2.4 * sc, Color("#f4f7ff"))
+	else:
+		var tip := hand + Vector2(dir * (16.0 + progress * 10.0) * sc, (-26.0 + progress * 34.0) * sc)
+		draw_line(hand, tip, Color("#e7edf3"), 3.4 * sc, true)
+		var guard := hand + Vector2(dir * 4.0 * sc, -2.0 * sc)
+		draw_line(guard + Vector2(-6.0 * sc, -3.0 * sc), guard + Vector2(6.0 * sc, 3.0 * sc), Color("#8d6a3e"), 3.2 * sc, true)
 
 # ---------------------------------------------------------
 # توابع رابط کاربری
@@ -1950,39 +2027,32 @@ func _unit_name_fa(kind: String) -> String:
 func _draw_battle_ui() -> void:
 	var mode_label := _stage_name_fa(stage_i)
 	if game_mode == "survival":
-		mode_label = "بقا  ·  موج " + str(survival_wave)
+		mode_label = "بقا · موج " + str(survival_wave)
 	elif game_mode == "tournament":
-		mode_label = "مسابقات  ·  دور " + str(tournament_round) + "/5"
-	_text("جنگاوران کوچک", Vector2(124, 36), 17, GOLD)
-	_text(mode_label, Vector2(124, 56), 13, MUTED)
-	_pill(Rect2(430, 16, 200, 40), str(gold) + " طلا", GOLD)
-	_pill(Rect2(646, 16, 150, 40), "جمعیت " + str(_pop(0)) + "/" + str(_pop_limit()), BONE)
-	_button(Rect2(24, 16, 86, 42), "II", MUTED, true)
-	_bar(Rect2(24, 78, 250, 10), player_hp / maxf(1.0, player_max), BLUE)
-	_text("قلعهٔ شما  " + str(int(player_hp)), Vector2(24, 104), 12, MUTED)
-	_bar(Rect2(1006, 78, 250, 10), enemy_hp / maxf(1.0, enemy_max), RED)
-	_text("دشمن  " + str(int(enemy_hp)), Vector2(1006, 104), 12, MUTED)
-	if not player_queue.is_empty():
-		var st: Dictionary = STATS[str(player_queue[0])]
-		var total := float(st["time"])
-		var ratio := clampf(player_train_t / maxf(0.1, total), 0.0, 1.0)
-		_text("آموزش " + _unit_name_fa(str(player_queue[0])) + "  " + String.num(maxf(0.0, player_train_t), 1) + " ثانیه", Vector2(820, 48), 13, BONE)
-		_bar(Rect2(820, 54, 200, 6), 1.0 - ratio, GOLD)
-	draw_rect(Rect2(0, 592, W, 128), Color(0.035, 0.045, 0.06, 0.94))
-	draw_line(Vector2(0, 592), Vector2(W, 592), Color(GOLD.r, GOLD.g, GOLD.b, 0.9), 2.0)
+		mode_label = "مسابقه · دور " + str(tournament_round) + "/5"
+	draw_rect(Rect2(0, 0, W, 96), Color(0.035, 0.045, 0.07, 0.78))
+	draw_line(Vector2(0, 96), Vector2(W, 96), Color(GOLD.r, GOLD.g, GOLD.b, 0.55), 1.5)
+	_button(Rect2(12, 12, 64, 72), "II", MUTED, true)
+	_pill(Rect2(86, 12, 144, 34), str(gold) + " طلا", GOLD)
+	_pill(Rect2(86, 50, 144, 34), str(_pop(0)) + "/" + str(_pop_limit()), BONE)
+	for i in KIND_ORDER.size():
+		_draw_train(i)
 	for i in 3:
 		var names: Array = ["حمله", "دفاع", "عقب‌نشینی"]
 		var ids: Array = ["attack", "defend", "garrison"]
 		var on: bool = p_order == str(ids[i])
 		_button(_order_rect(i), names[i], GOLD if on else Color("#8d97a5"), true, on)
-	for i in KIND_ORDER.size():
-		_draw_train(i)
+	_text(mode_label, Vector2(430, 168), 14, BONE)
+	_bar(Rect2(430, 188, 250, 8), player_hp / maxf(1.0, player_max), BLUE)
+	_bar(Rect2(860, 188, 250, 8), enemy_hp / maxf(1.0, enemy_max), RED)
+	_text("قلعه " + str(int(player_hp)), Vector2(430, 212), 12, MUTED)
+	_text("دشمن " + str(int(enemy_hp)), Vector2(860, 212), 12, MUTED)
 	_draw_joy()
 	_draw_action()
 	if toast_t > 0.0:
 		_pill(Rect2(390, 118, 500, 36), toast, Color("#d7e2ef"))
 	if hint_t > 0.0 and stage_i == 0:
-		_text("برای کنترل، یک نیرو را انتخاب کن. معدن‌چی‌ها طلا جمع می‌کنند.", Vector2(250, 168), 14, BONE)
+		_text("یکی از نیروها را لمس کن. دوربین دنبالش می‌رود. میدان را بکش تا نگاه کنی.", Vector2(250, 248), 15, BONE)
 	if intro_t > 0.0:
 		draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
 		_text(_stage_name_fa(stage_i), Vector2(430, 300), 32, GOLD)
@@ -2004,14 +2074,20 @@ func _draw_train(i: int) -> void:
 	var afford := gold >= int(st["cost"]) and _pop(0) + int(st["pop"]) <= _pop_limit()
 	var accent := GOLD if on and afford else Color("#5c6570")
 	_button(rect, "", accent, on)
-	_text(_unit_name_fa(kind), rect.position + Vector2(12, 24), 15, BONE if on else MUTED)
-	_text(str(int(st["cost"])) + " طلا  ·  " + str(int(st["pop"])), rect.position + Vector2(12, 46), 12, GOLD if on and afford else Color("#a86868"))
+	var tex: Texture2D = UNIT_HEAD_TEXTURES[kind]
+	draw_texture_rect(tex, Rect2(rect.position + Vector2(6, 18), Vector2(36, 44)), false)
+	_text(_unit_name_fa(kind), rect.position + Vector2(46, 30), 15, BONE if on else MUTED)
+	_text(str(int(st["cost"])) + " · " + str(int(st["pop"])), rect.position + Vector2(46, 52), 12, GOLD if on and afford else Color("#c07070"))
 	var queued := 0
 	for queued_kind in player_queue:
 		if str(queued_kind) == kind:
 			queued += 1
 	if queued > 0:
 		_text("×" + str(queued), rect.position + Vector2(rect.size.x - 28, 24), 14, GOLD)
+	if not player_queue.is_empty() and str(player_queue[0]) == kind:
+		var total := float(st["time"])
+		var ratio := clampf(player_train_t / maxf(0.1, total), 0.0, 1.0)
+		_bar(Rect2(rect.position.x + 6.0, rect.position.y + rect.size.y - 7.0, rect.size.x - 12.0, 4.0), 1.0 - ratio, GOLD)
 
 func _draw_joy() -> void:
 	var c := JOY_C
@@ -2091,7 +2167,7 @@ func _draw_menu() -> void:
 		total += int(s)
 	_text("پیروزی‌ها " + str(wins) + "  ·  ستاره‌ها " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 614), 13, MUTED)
 	_text("رکورد بقا: موج " + str(best_wave) + "  ·  قهرمانی‌ها: " + str(tournament_wins), Vector2(80, 640), 12, GOLD)
-	_text("VERSION 0.8.0", Vector2(80, 684), 12, Color("#66707c"))
+	_text("نسخه ۰.۹ — میدان را بکش تا نگاه کنی", Vector2(80, 684), 13, Color("#66707c"))
 
 func _draw_map() -> void:
 	_draw_sky()
@@ -2125,8 +2201,8 @@ func _draw_help() -> void:
 		"معدن‌چی به معدن می‌رود، طلا جمع می‌کند و آن را به پایگاه می‌آورد.",
 		"از نوار پایین برای آموزش نیروها استفاده کن؛ جمعیت محدود است.",
 		"دستورهای ارتش را از بالای صفحه انتخاب کن و وضعیت میدان را زیر نظر بگیر.",
-		"برای کنترل مستقیم، روی یکی از نیروهای خودت ضربه بزن.",
-		"جوی‌استیک سمت چپ برای حرکت است؛ در رایانه می‌توانی از کلیدهای WASD استفاده کنی.",
+		"برای کنترل مستقیم، روی یکی از نیروهای خودت ضربه بزن. دوربین دنبالش می‌رود.",
+		"میدان را بکش تا اطراف را ببینی. جوی‌استیک پایین چپ حرکت است؛ WASD هم کار می‌کند.",
 		"دکمهٔ سمت راست، مهارت ویژهٔ نیروی انتخاب‌شده را فعال می‌کند.",
 		"هر نوع نیرو ویژگی‌های متفاوتی دارد؛ ترکیب مناسب را با توجه به مرحله انتخاب کن.",
 		"با جمع‌آوری طلا و مدیریت زمان آموزش، گروهت را تقویت کن.",
@@ -2208,13 +2284,16 @@ func _bar(rect: Rect2, ratio: float, color: Color) -> void:
 	draw_rect(rect, Color(0, 0, 0, 0.45))
 	draw_rect(Rect2(rect.position, Vector2(rect.size.x * clampf(ratio, 0.0, 1.0), rect.size.y)), color)
 
+func _font() -> Font:
+	return ui_font if ui_font != null else ThemeDB.fallback_font
+
 func _text(label: String, pos: Vector2, size: int, color: Color) -> void:
-	draw_string(ThemeDB.fallback_font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+	draw_string(_font(), pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 func _text_in(rect: Rect2, label: String, size: int, color: Color) -> void:
-	var width := ThemeDB.fallback_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var width := _font().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var pos := Vector2(rect.position.x + (rect.size.x - width) * 0.5, rect.position.y + rect.size.y * 0.5 + float(size) * 0.32)
-	_text(label, pos, size, color)
+	draw_string(_font(), pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 func _tone(freq: float, dur: float, vol: float, _unused: float) -> AudioStreamWAV:
 	return _mix([[freq, 1.0]], dur, vol, false)

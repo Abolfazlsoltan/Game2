@@ -2,7 +2,7 @@
 
 نبرد ارتش آدمک‌ها برای اندروید. معدن وسط میدان، سربازگیری، و شکستن مجسمهٔ دشمن. الهام از بازی‌های استراتژی خطی مثل Stick War Legacy، با ارتش، کنترل و ظاهر مخصوص همین بازی.
 
-A landscape stick-legion strategy game for Android, built with Godot 4.5. The campaign now contains twelve original encounters.
+A landscape stick-legion strategy game for Android, built with Godot 4.5. نسخه ۰.۹ میدان را نزدیک‌تر نشان می‌دهد: دوربین دنبال سرباز انتخاب‌شده می‌رود، کشیدن میدان اطراف را نشان می‌دهد، و دکمه‌های آموزش مثل بازی‌های اندرویدی بالای صفحه است.
 
 ## Play
 - Miners haul gold from the center vein back to your statue. A miner you control digs faster.
