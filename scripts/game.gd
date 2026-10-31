@@ -10,11 +10,13 @@ const HOME_X := 168.0
 const AWAY_X := 1112.0
 const MINE_X := 640.0
 const MINE_Y := 512.0
+const GOLD_PILES: Array[Vector2] = [Vector2(548, 498), Vector2(640, 526), Vector2(734, 494)]
 const BAG_MAX := 90.0
 const JOY_C := Vector2(108, 628)
 const ACT_C := Vector2(1172, 628)
+const SKILL_C := Vector2(1044, 628)
 const JOY_R := 58.0
-const CAM_ZOOM := 1.58
+const CAM_ZOOM := 1.78
 const CAM_FOCUS := Vector2(640.0, 368.0)
 
 const GOLD := Color("#e2b34a")
@@ -99,6 +101,9 @@ var ending := ""
 var ending_t := 0.0
 var result_stars := 0
 var miner_warned := false
+var spell_cd: Array[float] = [0.0, 0.0, 0.0]
+var aiming := false
+var aim := Vector2.ZERO
 var sfx_players: Array[AudioStreamPlayer] = []
 var music: AudioStreamPlayer
 var sfx_streams := {}
@@ -369,7 +374,9 @@ func _begin(index: int) -> void:
 	enemy_queue.clear()
 	player_train_t = 0.0
 	enemy_train_t = 0.0
-	selected_id = _spawn(0, "MINER")
+	selected_id = -1
+	_spawn(0, "MINER")
+	_spawn(0, "MINER")
 	_spawn(1, "MINER")
 	if stage_i >= 1:
 		_spawn(0, "SWORD")
@@ -389,6 +396,10 @@ func _begin(index: int) -> void:
 	miner_warned = false
 	joy = Vector2.ZERO
 	action_held = false
+	aiming = false
+	spell_cd[0] = 0.0
+	spell_cd[1] = 0.0
+	spell_cd[2] = 0.0
 	cam_x = 420.0
 	cam_y = 508.0
 	cam_nudge = 0.0
@@ -500,7 +511,9 @@ func _spawn(side: int, kind: String) -> int:
 	var st: Dictionary = STATS[kind]
 	var id := next_id
 	next_id += 1
-	var y := (LANE_TOP + LANE_BOT) * 0.5 + rng.randf_range(-34.0, 34.0)
+	var lanes: Array[float] = [-56.0, -28.0, 0.0, 28.0, 56.0, -42.0, 14.0, 42.0]
+	var lane := lanes[id % lanes.size()]
+	var y := (LANE_TOP + LANE_BOT) * 0.5 + lane
 	units.append({
 		"id": id, "side": side, "kind": kind,
 		"x": (HOME_X + 28.0) if side == 0 else (AWAY_X - 28.0), "y": y,
@@ -508,11 +521,11 @@ func _spawn(side: int, kind: String) -> int:
 		"cd": rng.randf() * 0.25, "ability": 0.0, "block": 0.0, "stun": 0.0,
 		"anim": rng.randf() * TAU, "flash": 0.0, "dead": 0.0,
 		"facing": 1.0 if side == 0 else -1.0,
-		"slot": rng.randf_range(-30.0, 30.0),
+		"slot": lane,
 		"moving": false, "run": false,
 		"action": "", "action_t": 0.0, "action_len": 0.0, "hurt_t": 0.0,
 		"leap": 0.0, "leap_x": 0.0, "leap_y": 0.0,
-		"swing": 0.0, "pins": 0,
+		"swing": 0.0, "pins": 0, "haste": 0.0,
 	})
 	return id
 
@@ -584,6 +597,8 @@ func _step(dt: float) -> void:
 	battle_time += dt
 	hint_t = maxf(0.0, hint_t - dt)
 	_tick_queues(dt)
+	for i in 3:
+		spell_cd[i] = maxf(0.0, spell_cd[i] - dt)
 	ai_timer += dt
 	if ai_timer >= 0.9:
 		ai_timer = 0.0
@@ -649,6 +664,7 @@ func _command(i: int, dt: float) -> void:
 	u["swing"] = maxf(0.0, float(u.get("swing", 0.0)) - dt)
 	u["hurt_t"] = maxf(0.0, float(u.get("hurt_t", 0.0)) - dt)
 	u["action_t"] = maxf(0.0, float(u.get("action_t", 0.0)) - dt)
+	u["haste"] = maxf(0.0, float(u.get("haste", 0.0)) - dt)
 	if float(u["action_t"]) <= 0.0:
 		u["action"] = ""
 	u["moving"] = false
@@ -671,6 +687,8 @@ func _command(i: int, dt: float) -> void:
 		return
 	var stick := _stick()
 	var controlled := int(u["side"]) == 0 and int(u["id"]) == selected_id
+	if controlled and float(u["hp"]) < float(u["max_hp"]) and float(u["dead"]) <= 0.0:
+		u["hp"] = minf(float(u["max_hp"]), float(u["hp"]) + 12.0 * dt)
 	if controlled:
 		_manual(u, dt, stick)
 	elif str(u["kind"]) == "MINER":
@@ -686,11 +704,17 @@ func _stick() -> Vector2:
 		return key_move
 	return joy
 
+func _controlled_kind() -> String:
+	var index := _index_of(selected_id)
+	if index < 0:
+		return ""
+	return str(units[index]["kind"])
+
 func _manual(u: Dictionary, dt: float, stick: Vector2) -> void:
 	var v := stick
 	if v.length() > 1.0:
 		v = v.normalized()
-	var speed := float(STATS[str(u["kind"])]["speed"])
+	var speed := float(STATS[str(u["kind"])]["speed"]) * _haste_mul(u)
 	if v.length() > 0.12:
 		var step_distance := speed * minf(1.0, v.length()) * dt
 		u["x"] = float(u["x"]) + v.x * speed * dt
@@ -700,10 +724,15 @@ func _manual(u: Dictionary, dt: float, stick: Vector2) -> void:
 			u["facing"] = 1.0 if v.x > 0.0 else -1.0
 		u["run"] = v.length() > 0.68
 		u["anim"] = float(u["anim"]) + step_distance * (0.112 if bool(u["run"]) else 0.068)
+	if aiming and str(u["kind"]) == "ARCHER":
+		u["facing"] = 1.0 if aim.x >= float(u["x"]) else -1.0
 	if str(u["kind"]) == "MINER":
 		_dig(u, dt, true)
-	if not _try_attack(u):
-		_maybe_statue(u)
+	if action_held and str(u["kind"]) != "MINER":
+		if not _try_attack(u):
+			_loose_shot(u)
+	elif action_held and str(u["kind"]) == "MINER":
+		_dig(u, dt, true)
 
 func _miner_ai(u: Dictionary, dt: float) -> void:
 	var side := int(u["side"])
@@ -714,15 +743,44 @@ func _miner_ai(u: Dictionary, dt: float) -> void:
 	if going_home:
 		_walk(u, Vector2(home + (30.0 if side == 0 else -30.0), float(u["y"])), speed, dt)
 	else:
-		var mine := Vector2(MINE_X + (-26.0 if side == 0 else 26.0), clampf(MINE_Y + float(u["slot"]) * 0.35, LANE_TOP + 8.0, LANE_BOT - 4.0))
-		if Vector2(float(u["x"]), float(u["y"])).distance_to(mine) > 28.0:
+		var mine := _mine_spot(u)
+		if Vector2(float(u["x"]), float(u["y"])).distance_to(mine) > 26.0:
 			_walk(u, mine, speed, dt)
 		else:
 			_dig(u, dt, false)
 	_try_attack(u)
 
+func _haste_mul(u: Dictionary) -> float:
+	return 1.38 if float(u.get("haste", 0.0)) > 0.0 else 1.0
+
+func _mine_spot(u: Dictionary) -> Vector2:
+	var side := int(u["side"])
+	var pos := Vector2(float(u["x"]), float(u["y"]))
+	var best := GOLD_PILES[0]
+	var best_d := 100000.0
+	for pile in GOLD_PILES:
+		var spot := pile + Vector2(-18.0 if side == 0 else 18.0, clampf(float(u["slot"]) * 0.12, -10.0, 10.0))
+		var crowd := 0
+		for other in units:
+			if int(other["id"]) == int(u["id"]) or str(other["kind"]) != "MINER" or float(other["dead"]) > 0.0:
+				continue
+			if Vector2(float(other["x"]), float(other["y"])).distance_to(spot) < 24.0:
+				crowd += 1
+		var score := pos.distance_to(spot) + float(crowd) * 48.0
+		if score < best_d:
+			best_d = score
+			best = spot
+	return best
+
+func _near_gold(u: Dictionary) -> bool:
+	var pos := Vector2(float(u["x"]), float(u["y"]))
+	for pile in GOLD_PILES:
+		if pos.distance_to(pile) <= 56.0:
+			return true
+	return false
+
 func _dig(u: Dictionary, dt: float, boosted: bool) -> void:
-	if Vector2(float(u["x"]), float(u["y"])).distance_to(Vector2(MINE_X, MINE_Y)) > 58.0:
+	if not _near_gold(u):
 		return
 	if float(u["bag"]) >= BAG_MAX:
 		return
@@ -767,7 +825,7 @@ func _combat_ai(u: Dictionary, dt: float) -> void:
 	var kind := str(u["kind"])
 	var st: Dictionary = STATS[kind]
 	var order := p_order if side == 0 else e_order
-	var speed := float(st["speed"])
+	var speed := float(st["speed"]) * _haste_mul(u)
 	var melee := bool(st["melee"])
 	var reach := float(st["range"])
 	var aggro := 150.0
@@ -840,6 +898,43 @@ func _set_unit_action(u: Dictionary, action: String, duration: float) -> void:
 	u["action"] = action
 	u["action_t"] = maxf(0.05, duration)
 	u["action_len"] = maxf(0.05, duration)
+
+func _loose_shot(u: Dictionary) -> void:
+	if float(u["cd"]) > 0.0 or bool(STATS[str(u["kind"])]["melee"]):
+		if bool(STATS[str(u["kind"])]["melee"]):
+			_maybe_statue(u)
+		return
+	var tx := float(u["x"]) + float(u["facing"]) * 230.0
+	var ty := float(u["y"]) - 22.0
+	if aiming:
+		tx = aim.x
+		ty = aim.y
+	u["cd"] = float(STATS[str(u["kind"])]["cd"])
+	u["swing"] = 0.28
+	_shoot(u, tx, ty, _dmg(u), false)
+
+func _manual_strike() -> void:
+	var index := _index_of(selected_id)
+	if index < 0:
+		_toast("یکی از سربازها را لمس کن")
+		return
+	var u: Dictionary = units[index]
+	if float(u["dead"]) > 0.0:
+		return
+	if str(u["kind"]) == "MINER":
+		_dig(u, 0.45, true)
+		_set_unit_action(u, "mine", 0.42)
+		units[index] = u
+		return
+	if not _try_attack(u):
+		if bool(STATS[str(u["kind"])]["melee"]):
+			u["x"] = float(u["x"]) + float(u["facing"]) * 16.0
+			u["swing"] = 0.24
+			u["moving"] = true
+			_maybe_statue(u)
+		else:
+			_loose_shot(u)
+	units[index] = u
 
 func _try_attack(u: Dictionary) -> bool:
 	if float(u["cd"]) > 0.0:
@@ -924,6 +1019,9 @@ func _leap_land(u: Dictionary) -> void:
 func _hurt(u: Dictionary, amount: float, from_x: float) -> void:
 	if float(u["dead"]) > 0.0 or float(u["hp"]) <= 0.0:
 		return
+	var behind := (from_x - float(u["x"])) * float(u.get("facing", 1.0)) < -8.0
+	if behind:
+		amount *= 1.7
 	if str(u["kind"]) == "SPEAR" and float(u["block"]) > 0.0:
 		var facing_hit := (from_x - float(u["x"])) * float(u["facing"])
 		if facing_hit >= -4.0:
@@ -932,7 +1030,10 @@ func _hurt(u: Dictionary, amount: float, from_x: float) -> void:
 	u["hp"] = float(u["hp"]) - amount
 	u["flash"] = 0.1
 	u["hurt_t"] = 0.24
-	_floater(Vector2(float(u["x"]) + rng.randf_range(-8.0, 8.0), float(u["y"]) - 52.0), str(int(amount)), RED if int(u["side"]) == 0 else GOLD)
+	var tag := str(int(amount))
+	if behind:
+		tag += " پشت"
+	_floater(Vector2(float(u["x"]) + rng.randf_range(-8.0, 8.0), float(u["y"]) - 52.0), tag, RED if int(u["side"]) == 0 else GOLD)
 	if float(u["hp"]) <= 0.0:
 		u["hp"] = 0.0
 		u["dead"] = 0.55
@@ -985,6 +1086,57 @@ func _roll(mix: Array) -> String:
 		if r <= 0.0:
 			return str(pair[0])
 	return str(mix[0][0])
+
+const SPELLS: Array[Dictionary] = [
+	{"name": "فراخوان", "cost": 80, "cd": 16.0},
+	{"name": "درمان", "cost": 110, "cd": 18.0},
+	{"name": "لرزه", "cost": 150, "cd": 20.0},
+]
+
+func _spell_rect(i: int) -> Rect2:
+	return Rect2(430.0 + float(i) * 138.0, 228.0, 128.0, 40.0)
+
+func _cast_spell(index: int) -> void:
+	if index < 0 or index > 2:
+		return
+	if spell_cd[index] > 0.0:
+		_toast("جادو هنوز آماده نیست")
+		return
+	var cost := int(SPELLS[index]["cost"])
+	if gold < cost:
+		_toast("طلای جادو کم است")
+		_sfx("ui")
+		return
+	gold -= cost
+	spell_cd[index] = float(SPELLS[index]["cd"])
+	if index == 0:
+		for u in units:
+			if int(u["side"]) == 0 and float(u["dead"]) <= 0.0 and str(u["kind"]) != "MINER":
+				u["haste"] = 6.5
+		_toast("فراخوان — لشکر تندتر می‌دود")
+		_sfx("train")
+	elif index == 1:
+		var healed := 0
+		for u in units:
+			if int(u["side"]) == 0 and float(u["dead"]) <= 0.0:
+				u["hp"] = minf(float(u["max_hp"]), float(u["hp"]) + 58.0)
+				healed += 1
+		_burst(Vector2(HOME_X + 80.0, 500.0), GREEN, 12)
+		_toast("درمان — " + str(healed) + " نفر")
+		_sfx("coin")
+	else:
+		var front := HOME_X + 40.0
+		for u in units:
+			if int(u["side"]) == 0 and str(u["kind"]) != "MINER" and float(u["dead"]) <= 0.0:
+				front = maxf(front, float(u["x"]))
+		for u in units:
+			if int(u["side"]) == 1 and float(u["dead"]) <= 0.0 and absf(float(u["x"]) - front) < 150.0:
+				u["stun"] = 1.2
+				_hurt(u, 14.0, front)
+		_burst(Vector2(front + 40.0, 520.0), Color("#d7c08a"), 16)
+		shake = 8.0
+		_toast("لرزه — صف دشمن می‌لرزد")
+		_sfx("hit")
 
 func _use_ability() -> void:
 	var index := _index_of(selected_id)
@@ -1245,7 +1397,15 @@ func _key_action(code: int) -> void:
 	if screen != "battle" or paused or ending != "":
 		return
 	if code == KEY_SPACE or code == KEY_J:
+		_manual_strike()
+	elif code == KEY_K:
 		_use_ability()
+	elif code == KEY_Q:
+		_cast_spell(0)
+	elif code == KEY_E:
+		_cast_spell(1)
+	elif code == KEY_R:
+		_cast_spell(2)
 	elif code == KEY_1:
 		_enqueue(0, "MINER")
 	elif code == KEY_2:
@@ -1274,9 +1434,12 @@ func _pointer_down(id: int, screen_pos: Vector2) -> void:
 		if p.distance_to(JOY_C) <= JOY_R + 22.0:
 			rec["kind"] = "joy"
 			_set_joy(p)
-		elif p.distance_to(ACT_C) <= 58.0:
+		elif p.distance_to(ACT_C) <= 54.0:
 			rec["kind"] = "action"
 			action_held = true
+			_manual_strike()
+		elif p.distance_to(SKILL_C) <= 46.0:
+			rec["kind"] = "skill"
 			_use_ability()
 		else:
 			var b := _hit_button(p)
@@ -1295,9 +1458,14 @@ func _pointer_move(id: int, screen_pos: Vector2) -> void:
 		return
 	var rec: Dictionary = pointers[id]
 	rec["p"] = _to_game(screen_pos)
-	if str(rec["kind"]) == "field" or str(rec["kind"]) == "pan":
+	if str(rec["kind"]) == "field" or str(rec["kind"]) == "pan" or str(rec["kind"]) == "aim":
 		var delta := Vector2(rec["p"]) - Vector2(rec["o"])
-		if str(rec["kind"]) == "field" and delta.length() > 28.0 and screen == "battle":
+		var archer := _controlled_kind() == "ARCHER"
+		if archer and screen == "battle" and (str(rec["kind"]) == "aim" or delta.length() > 18.0):
+			rec["kind"] = "aim"
+			aiming = true
+			aim = _ui_to_world(rec["p"])
+		elif str(rec["kind"]) == "field" and delta.length() > 28.0 and screen == "battle":
 			rec["kind"] = "pan"
 		if str(rec["kind"]) == "pan":
 			cam_nudge = -delta.x / CAM_ZOOM
@@ -1316,6 +1484,10 @@ func _pointer_up(id: int) -> void:
 	elif str(rec["kind"]) == "action":
 		if not _pointer_kind("action"):
 			action_held = false
+	elif str(rec["kind"]) == "aim":
+		aim = _ui_to_world(Vector2(rec["p"]))
+		aiming = false
+		_manual_strike()
 	elif str(rec["kind"]) == "btn":
 		if _hit_button(rec["p"]) == str(rec["btn"]):
 			_click(str(rec["btn"]))
@@ -1406,6 +1578,8 @@ func _click(id: String) -> void:
 		_set_order("defend")
 	elif id == "order_garrison":
 		_set_order("garrison")
+	elif id.begins_with("spell_"):
+		_cast_spell(int(id.trim_prefix("spell_")))
 	elif id.begins_with("train_"):
 		_enqueue(0, id.trim_prefix("train_"))
 	elif id == "next":
@@ -1453,6 +1627,9 @@ func _field_tap(p: Vector2) -> void:
 	if best >= 0:
 		selected_id = best
 		_sfx("ui")
+	else:
+		selected_id = -1
+		aiming = false
 
 func _hit_button(p: Vector2) -> String:
 	if screen == "menu":
@@ -1509,6 +1686,9 @@ func _hit_button(p: Vector2) -> String:
 			return "order_defend"
 		if _order_rect(2).has_point(p):
 			return "order_garrison"
+		for i in 3:
+			if _spell_rect(i).has_point(p):
+				return "spell_" + str(i)
 		for i in KIND_ORDER.size():
 			if _train_rect(i).has_point(p):
 				return "train_" + str(KIND_ORDER[i])
@@ -1584,6 +1764,14 @@ func _draw_world() -> void:
 	ordered.sort_custom(_y_less)
 	for u in ordered:
 		_draw_stick(u)
+	if aiming:
+		var aim_i := _index_of(selected_id)
+		if aim_i >= 0:
+			var au: Dictionary = units[aim_i]
+			var from := Vector2(float(au["x"]) + float(au["facing"]) * 16.0, float(au["y"]) - 40.0)
+			draw_line(from, aim, Color(GOLD.r, GOLD.g, GOLD.b, 0.9), 2.0, true)
+			draw_circle(aim, 7.0, GOLD)
+			draw_arc(aim, 12.0, 0.0, TAU, 16, Color("#fff6d8"), 1.6, true)
 	for p in particles:
 		var a := clampf(float(p["life"]) / float(p["max"]), 0.0, 1.0)
 		var c: Color = p["color"]
@@ -1612,79 +1800,84 @@ func _sky_colors() -> Array:
 	return skies[idx]
 
 func _draw_sky() -> void:
-	var cols: Array = _sky_colors()
-	var top: Color = cols[0]
-	var bot: Color = cols[1]
+	var night := (screen == "battle" or screen == "result") and int(_stage()["sky"]) == 5
+	var top := Color("#16304d") if night else Color("#2f86d6")
+	var bot := Color("#31445f") if night else Color("#b7e4ff")
 	for i in 24:
 		var t := float(i) / 24.0
-		draw_rect(Rect2(-30, t * 430.0 - 10.0, W + 60.0, 24.0), top.lerp(bot, t))
-	var night := int(_stage()["sky"]) == 5
-	var sun_col := Color("#fff0c7") if not night else Color("#b8c8f0")
-	draw_circle(Vector2(1000, 118), 54, Color(sun_col.r, sun_col.g, sun_col.b, 0.10))
-	draw_circle(Vector2(1000, 118), 39, Color(sun_col.r, sun_col.g, sun_col.b, 0.82))
+		draw_rect(Rect2(-40, t * 430.0 - 10.0, W + 80.0, 24.0), top.lerp(bot, t))
+	if not night:
+		for i in 6:
+			var cx := fmod(40.0 + float(i) * 240.0 + tick * 10.0, 1560.0) - 80.0
+			var cy := 78.0 + float(i % 3) * 28.0
+			draw_circle(Vector2(cx, cy), 22.0, Color(1, 1, 1, 0.88))
+			draw_circle(Vector2(cx + 18.0, cy + 4.0), 16.0, Color(1, 1, 1, 0.88))
+			draw_circle(Vector2(cx - 16.0, cy + 6.0), 14.0, Color(1, 1, 1, 0.82))
+		draw_circle(Vector2(1080, 92), 46, Color(1, 0.95, 0.72, 0.28))
+		draw_circle(Vector2(1080, 92), 28, Color("#ffe38a"))
+	else:
+		draw_circle(Vector2(180, 86), 18, Color("#e7eefc"))
+		for i in 18:
+			draw_circle(Vector2(fmod(float(i) * 97.0, 1280.0), 40.0 + float(i % 5) * 18.0), 1.3, Color(1, 1, 1, 0.8))
+	var hill := Color("#1d3b28") if not night else Color("#1a2430")
+	var hill2 := Color("#2f6a3b") if not night else Color("#243246")
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(-40, 382), Vector2(110, 328), Vector2(218, 354), Vector2(350, 292),
-		Vector2(488, 370), Vector2(620, 334), Vector2(770, 382), Vector2(930, 315),
-		Vector2(1080, 352), Vector2(1210, 302), Vector2(1320, 380), Vector2(1320, 440), Vector2(-40, 440)
-	]), Color("#283747"))
+		Vector2(-40, 392), Vector2(90, 318), Vector2(230, 360), Vector2(360, 286),
+		Vector2(520, 358), Vector2(680, 300), Vector2(860, 366), Vector2(1040, 292),
+		Vector2(1200, 350), Vector2(1340, 300), Vector2(1340, 430), Vector2(-40, 430)
+	]), hill)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(-30, 408), Vector2(170, 358), Vector2(330, 398), Vector2(490, 346),
-		Vector2(650, 402), Vector2(830, 356), Vector2(1020, 404), Vector2(1180, 360),
-		Vector2(1320, 410), Vector2(1320, 450), Vector2(-30, 450)
-	]), Color("#34443f"))
-	for ruin_x in [76.0, 414.0, 856.0, 1190.0]:
-		draw_rect(Rect2(ruin_x, 365, 18, 48), Color("#27323a"))
-		draw_rect(Rect2(ruin_x - 5, 358, 28, 8), Color("#3e4b50"))
-		draw_line(Vector2(ruin_x + 9, 343), Vector2(ruin_x + 9, 368), Color("#7d6a52"), 2.0)
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(ruin_x + 10, 344), Vector2(ruin_x + 28, 350), Vector2(ruin_x + 10, 357)
-		]), BLUE if ruin_x < 640.0 else RED)
+		Vector2(-40, 410), Vector2(160, 348), Vector2(340, 392), Vector2(520, 336),
+		Vector2(700, 398), Vector2(900, 344), Vector2(1100, 396), Vector2(1340, 360),
+		Vector2(1340, 450), Vector2(-40, 450)
+	]), hill2)
 
 func _draw_ground() -> void:
-	draw_rect(Rect2(-30, 400, W + 60, 340), Color("#202b2a"))
+	var night := (screen == "battle" or screen == "result") and int(_stage()["sky"]) == 5
+	var grass := Color("#247a34") if not night else Color("#1c3328")
+	var grass2 := Color("#39a044") if not night else Color("#274536")
+	var dirt := Color("#c49a62") if not night else Color("#6d5840")
+	var dirt_dark := Color("#a67b45") if not night else Color("#54422e")
+	draw_rect(Rect2(-40, 400, W + 80, 360), grass)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(-20, 428), Vector2(1300, 420), Vector2(1300, 720), Vector2(-20, 720)
-	]), Color("#354238"))
+		Vector2(-20, 438), Vector2(1300, 426), Vector2(1320, 720), Vector2(-20, 720)
+	]), grass2)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(70, 465), Vector2(1210, 450), Vector2(1250, 612), Vector2(35, 624)
-	]), Color("#46513a"))
+		Vector2(40, 470), Vector2(1240, 456), Vector2(1270, 608), Vector2(18, 622)
+	]), dirt)
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(112, 491), Vector2(1168, 483), Vector2(1185, 579), Vector2(94, 590)
-	]), Color("#72583e"))
+		Vector2(40, 470), Vector2(1240, 456), Vector2(1230, 478), Vector2(52, 492)
+	]), dirt.lightened(0.12))
 	draw_colored_polygon(PackedVector2Array([
-		Vector2(112, 491), Vector2(1168, 483), Vector2(1160, 496), Vector2(104, 505)
-	]), Color("#9a7952"))
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(94, 590), Vector2(1185, 579), Vector2(1220, 620), Vector2(62, 635)
-	]), Color("#26352e"))
-	for i in 25:
-		var x := 36.0 + float(i) * 51.0
-		var y := 438.0 + sin(float(i) * 1.7) * 7.0
-		draw_line(Vector2(x, y + 8.0), Vector2(x + 5.0, y - 1.0), Color("#74835a", 0.65), 2.0)
-	for i in 18:
-		var x := 122.0 + float(i) * 59.0
-		var y := 522.0 + sin(float(i) * 2.3) * 22.0
-		var stone := Color("#8a7357") if i % 2 == 0 else Color("#665943")
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(x - 12, y), Vector2(x - 5, y - 4), Vector2(x + 11, y - 3),
-			Vector2(x + 15, y + 2), Vector2(x + 1, y + 5), Vector2(x - 10, y + 4)
-		]), stone)
-	draw_line(Vector2(40, 635), Vector2(1240, 619), Color("#66735a", 0.7), 2.0)
+		Vector2(70, 548), Vector2(1210, 536), Vector2(1236, 590), Vector2(48, 602)
+	]), dirt_dark)
+	for i in 34:
+		var x := 28.0 + float(i) * 38.0
+		var y := 432.0 + sin(float(i) * 1.7) * 6.0
+		draw_line(Vector2(x, y + 10.0), Vector2(x + 2.0, y - 6.0), Color("#b6e38a", 0.8), 2.0)
+		draw_line(Vector2(x + 5.0, y + 10.0), Vector2(x + 8.0, y - 3.0), Color("#8dcf62", 0.7), 1.6)
+	for i in 16:
+		var x := 110.0 + float(i) * 72.0
+		var y := 520.0 + sin(float(i) * 2.1) * 16.0
+		draw_line(Vector2(x, y + 8.0), Vector2(x - 4.0, y - 7.0), Color("#6d4c2c", 0.45), 1.4)
 
 func _draw_mine() -> void:
-	var bob := sin(tick * 3.0) * 2.0
-	# پایه سنگی معدن
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(MINE_X - 54, MINE_Y + 8), Vector2(MINE_X - 20, MINE_Y - 46 + bob), Vector2(MINE_X + 8, MINE_Y - 8),
-		Vector2(MINE_X + 36, MINE_Y - 52), Vector2(MINE_X + 62, MINE_Y + 10)
-	]), Color("#5c5348"))
-	# تکه‌های طلا (زرد و درخشان)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(MINE_X - 10, MINE_Y - 8), Vector2(MINE_X + 4, MINE_Y - 28), Vector2(MINE_X + 18, MINE_Y - 6)
-	]), GOLD)
-	draw_circle(Vector2(MINE_X - 16, MINE_Y - 18 + bob), 4.0, Color("#ffe29a"))
-	draw_circle(Vector2(MINE_X + 25, MINE_Y - 15 + bob), 3.0, Color("#ffe29a"))
-	_text("GOLD", Vector2(MINE_X - 22, MINE_Y - 58), 12, GOLD)
+	for i in GOLD_PILES.size():
+		var pile: Vector2 = GOLD_PILES[i]
+		var bob := sin(tick * 3.0 + float(i)) * 2.0
+		_draw_ellipse_shape(pile + Vector2(0, 16), Vector2(34, 8), Color(0, 0, 0, 0.22))
+		draw_colored_polygon(PackedVector2Array([
+			pile + Vector2(-28, 10), pile + Vector2(-8, -26 + bob), pile + Vector2(6, -6),
+			pile + Vector2(22, -30 + bob), pile + Vector2(34, 12)
+		]), Color("#6b6258"))
+		draw_colored_polygon(PackedVector2Array([
+			pile + Vector2(-12, 2), pile + Vector2(-2, -18 + bob), pile + Vector2(14, 0)
+		]), GOLD)
+		draw_colored_polygon(PackedVector2Array([
+			pile + Vector2(4, 4), pile + Vector2(16, -16 + bob), pile + Vector2(28, 6)
+		]), Color("#ffe7a2"))
+		draw_circle(pile + Vector2(-6, -8 + bob), 4.0, Color("#fff1c2"))
+	_text("طلا", Vector2(MINE_X - 14, 430), 16, Color("#5a3d12"))
 
 func _draw_statue(x: float, ratio: float, friendly: bool) -> void:
 	# طراحی مجسمه غول‌پیکر شبیه به استیک‌وار
@@ -2042,7 +2235,15 @@ func _draw_battle_ui() -> void:
 		var ids: Array = ["attack", "defend", "garrison"]
 		var on: bool = p_order == str(ids[i])
 		_button(_order_rect(i), names[i], GOLD if on else Color("#8d97a5"), true, on)
-	_text(mode_label, Vector2(430, 168), 14, BONE)
+	for i in 3:
+		var spell: Dictionary = SPELLS[i]
+		var ready := spell_cd[i] <= 0.0 and gold >= int(spell["cost"])
+		_button(_spell_rect(i), str(spell["name"]) + "  " + str(int(spell["cost"])), Color("#7eb6ff") if ready else MUTED, gold >= int(spell["cost"]) or spell_cd[i] > 0.0, ready)
+		if spell_cd[i] > 0.0:
+			var ratio := 1.0 - clampf(spell_cd[i] / float(spell["cd"]), 0.0, 1.0)
+			var r := _spell_rect(i)
+			_bar(Rect2(r.position.x + 6.0, r.position.y + r.size.y - 6.0, r.size.x - 12.0, 4.0), ratio, Color("#7eb6ff"))
+	_text(mode_label, Vector2(860, 168), 14, BONE)
 	_bar(Rect2(430, 188, 250, 8), player_hp / maxf(1.0, player_max), BLUE)
 	_bar(Rect2(860, 188, 250, 8), enemy_hp / maxf(1.0, enemy_max), RED)
 	_text("قلعه " + str(int(player_hp)), Vector2(430, 212), 12, MUTED)
@@ -2051,8 +2252,8 @@ func _draw_battle_ui() -> void:
 	_draw_action()
 	if toast_t > 0.0:
 		_pill(Rect2(390, 118, 500, 36), toast, Color("#d7e2ef"))
-	if hint_t > 0.0 and stage_i == 0:
-		_text("یکی از نیروها را لمس کن. دوربین دنبالش می‌رود. میدان را بکش تا نگاه کنی.", Vector2(250, 248), 15, BONE)
+	if hint_t > 0.0 and stage_i == 0 and game_mode == "campaign":
+		_text("معدن‌چی‌ها خودشان طلا می‌آورند. نیرو را لمس کن، با جوی‌استیک ببر، دکمهٔ بزرگ حمله است.", Vector2(250, 286), 15, Color("#173047"))
 	if intro_t > 0.0:
 		draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
 		_text(_stage_name_fa(stage_i), Vector2(430, 300), 32, GOLD)
@@ -2097,7 +2298,12 @@ func _draw_joy() -> void:
 	draw_arc(c + joy * (JOY_R * 0.55), 20, 0, TAU, 18, GOLD, 2.0, true)
 
 func _draw_action() -> void:
-	var c := ACT_C
+	var attack := ACT_C
+	draw_circle(attack, 48, Color(0.55, 0.12, 0.1, 0.94))
+	draw_circle(attack + Vector2(-8, -10), 18, Color(1, 1, 1, 0.16))
+	draw_arc(attack, 44, 0, TAU, 28, Color("#ffd36a"), 3.5, true)
+	_text("حمله", attack + Vector2(-18, 6), 16, Color("#fff6ea"))
+	var c := SKILL_C
 	var ready := true
 	var frac := 0.0
 	var index := _index_of(selected_id)
@@ -2106,14 +2312,14 @@ func _draw_action() -> void:
 		var max_cd := _ability_max(str(u["kind"]))
 		frac = clampf(float(u["ability"]) / max_cd, 0.0, 1.0) if max_cd > 0.0 else 0.0
 		ready = float(u["ability"]) <= 0.0
-	draw_circle(c, 40, Color(0.09, 0.07, 0.05, 0.92))
-	draw_arc(c, 36, 0, TAU, 28, GOLD if ready else MUTED, 3.0, true)
+	draw_circle(c, 34, Color(0.08, 0.12, 0.18, 0.94))
+	draw_arc(c, 31, 0, TAU, 24, GOLD if ready else MUTED, 3.0, true)
 	if frac > 0.0:
-		draw_arc(c, 30, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 24, Color("#3d8bfd"), 4.0, true)
-	var skill := "حمله"
+		draw_arc(c, 24, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - frac), 24, Color("#7eb6ff"), 4.0, true)
+	var skill := "مهارت"
 	if index >= 0:
 		skill = _ability_label(str(units[index]["kind"]))
-	_text(skill, c + Vector2(-26, 5), 13, BONE if ready else MUTED)
+	_text(skill, c + Vector2(-22, 5), 13, BONE if ready else MUTED)
 
 func _ability_label(kind: String) -> String:
 	match kind:
@@ -2154,6 +2360,7 @@ func _draw_menu() -> void:
 	_draw_stick({"id": -10, "side": 0, "kind": "SWORD", "x": 860, "y": 540, "hp": 10, "max_hp": 10, "anim": tick * 7.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0, "moving": true})
 	_draw_stick({"id": -11, "side": 0, "kind": "ARCHER", "x": 800, "y": 560, "hp": 10, "max_hp": 10, "anim": tick * 7.0 + 1.0, "facing": 1.0, "dead": 0.0, "flash": 0.0, "block": 0.0, "bag": 0.0, "slot": 0.0, "moving": true})
 	_draw_stick({"id": -12, "side": 1, "kind": "SPEAR", "x": 960, "y": 548, "hp": 10, "max_hp": 10, "anim": tick * 6.0, "facing": -1.0, "dead": 0.0, "flash": 0.0, "block": 0.4, "bag": 0.0, "slot": 0.0, "moving": true})
+	draw_rect(Rect2(0, 0, 520, H), Color(0.05, 0.09, 0.14, 0.78))
 	_text("جنگاوران کوچک", Vector2(78, 120), 18, GOLD)
 	_text("لشکر کوچک", Vector2(76, 188), 50, BONE)
 	_text("منابع جمع کن، نیروها را مدیریت کن و مراحل را پیش ببر.", Vector2(80, 230), 16, MUTED)
@@ -2167,7 +2374,7 @@ func _draw_menu() -> void:
 		total += int(s)
 	_text("پیروزی‌ها " + str(wins) + "  ·  ستاره‌ها " + str(total) + "/" + str(stars.size() * 3), Vector2(80, 614), 13, MUTED)
 	_text("رکورد بقا: موج " + str(best_wave) + "  ·  قهرمانی‌ها: " + str(tournament_wins), Vector2(80, 640), 12, GOLD)
-	_text("نسخه ۰.۹ — میدان را بکش تا نگاه کنی", Vector2(80, 684), 13, Color("#66707c"))
+	_text("نسخه ۱.۰ — مثل نبردهای جانبی اندروید: معدن، صف، حمله", Vector2(80, 684), 13, Color("#c5d0dc"))
 
 func _draw_map() -> void:
 	_draw_sky()
@@ -2199,13 +2406,13 @@ func _draw_help() -> void:
 	_text("راهنمای بازی", Vector2(78, 78), 32, GOLD)
 	var lines := [
 		"معدن‌چی به معدن می‌رود، طلا جمع می‌کند و آن را به پایگاه می‌آورد.",
-		"از نوار پایین برای آموزش نیروها استفاده کن؛ جمعیت محدود است.",
-		"دستورهای ارتش را از بالای صفحه انتخاب کن و وضعیت میدان را زیر نظر بگیر.",
-		"برای کنترل مستقیم، روی یکی از نیروهای خودت ضربه بزن. دوربین دنبالش می‌رود.",
-		"میدان را بکش تا اطراف را ببینی. جوی‌استیک پایین چپ حرکت است؛ WASD هم کار می‌کند.",
-		"دکمهٔ سمت راست، مهارت ویژهٔ نیروی انتخاب‌شده را فعال می‌کند.",
-		"هر نوع نیرو ویژگی‌های متفاوتی دارد؛ ترکیب مناسب را با توجه به مرحله انتخاب کن.",
-		"با جمع‌آوری طلا و مدیریت زمان آموزش، گروهت را تقویت کن.",
+		"از نوار بالا نیرو آموزش بده. جمعیت و طلا را نگاه کن.",
+		"حمله، دفاع و عقب‌نشینی را از سمت چپ انتخاب کن.",
+		"برای کنترل مستقیم، روی یکی از نیروهای خودت ضربه بزن. دوربین دنبالش می‌رود و آرام درمان می‌شود.",
+		"میدان را بکش تا اطراف را ببینی. اگر کماندار را گرفته‌ای، کشیدن هدف تیر است.",
+		"دکمهٔ قرمز بزرگ حمله است. دکمهٔ کوچک‌تر کنارش مهارت ویژه است.",
+		"فراخوان، درمان و لرزه جادوهای میدان‌اند و طلا می‌خواهند.",
+		"ضربه از پشت آسیب بیشتری می‌زند. نیزه‌دار با مهارت سپر می‌گیرد.",
 		"اگر قلعهٔ تو از بین برود، مرحله را می‌بازی؛ هدف هر مرحله را بررسی کن.",
 		"برای مکث یا ادامهٔ بازی از دکمهٔ بالای سمت چپ استفاده کن.",
 	]
@@ -2264,16 +2471,17 @@ func _gem(center: Vector2, filled: bool) -> void:
 		draw_polyline(line, Color("#66707c"), 1.6, true)
 
 func _button(rect: Rect2, label: String, accent: Color, enabled: bool, filled: bool = false) -> void:
-	draw_rect(Rect2(rect.position + Vector2(0, 3), rect.size), Color(0, 0, 0, 0.35))
-	var fill := Color(0.07, 0.09, 0.12, 0.96)
+	draw_rect(Rect2(rect.position + Vector2(0, 4), rect.size), Color(0, 0, 0, 0.35))
+	var fill := Color(0.08, 0.1, 0.14, 0.94)
 	if filled:
-		fill = Color(accent.r, accent.g, accent.b, 0.30)
+		fill = Color(accent.r * 0.55, accent.g * 0.42, accent.b * 0.28, 0.96)
 	elif not enabled:
-		fill = Color(0.04, 0.05, 0.07, 0.9)
+		fill = Color(0.05, 0.06, 0.08, 0.9)
 	draw_rect(rect, fill)
-	draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.95 if enabled else 0.35), false, 2.0)
+	draw_rect(Rect2(rect.position + Vector2(2, 2), Vector2(rect.size.x - 4, rect.size.y * 0.42)), Color(1, 1, 1, 0.08 if enabled else 0.03))
+	draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.95 if enabled else 0.35), false, 2.5)
 	if label != "":
-		_text_in(rect, label, 15, BONE if enabled else MUTED)
+		_text_in(rect, label, 15, Color("#fff8ee") if enabled else MUTED)
 
 func _pill(rect: Rect2, label: String, accent: Color) -> void:
 	draw_rect(rect, INK)
